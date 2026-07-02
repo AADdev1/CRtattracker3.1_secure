@@ -1,0 +1,1 @@
+CREATE TYPE public.kpi_role AS ENUM ('ITPM','BA'); ALTER TABLE public.kpis ADD COLUMN role public.kpi_role NOT NULL DEFAULT 'ITPM';
