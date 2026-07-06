@@ -3,14 +3,14 @@
 // exactly equals crs.ba and/or crs.itpm. Admins (user_management.is_admin)
 // bypass this entirely and see every CR/KPI/defect unfiltered.
 //
-// Uses the regular anon/publishable client (not a service-role admin
-// client — no service role key is configured for this project yet). This
-// relies on crs/kpi_results/defects/defect_status_mapping already having
-// fully-open RLS policies, same as the rest of the app.
+// Uses the service-role client (RLS is locked down on these tables — see
+// supabase/migrations/20260703000000_lock_down_rls.sql), loaded dynamically
+// inside each handler so client.server.ts never gets pulled into the client
+// bundle (this file is reachable from route components).
 import { createServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
 import { requireSessionUser } from "@/lib/gate.functions";
 import type { Database } from "@/integrations/supabase/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type CrRelation = "ba" | "itpm" | "both" | "admin";
 
@@ -29,14 +29,19 @@ function relationFor(row: { ba: string | null; itpm: string | null }, userName: 
   return null;
 }
 
-async function loadScopedCrs(userName: string, isAdmin: boolean, crNumber?: string) {
+async function loadScopedCrs(
+  db: SupabaseClient<Database>,
+  userName: string,
+  isAdmin: boolean,
+  crNumber?: string,
+) {
   const columns = crNumber
     ? "*"
     : "cr_number, title, application, severity, workflow_status, cr_size, date_created, date_modified, ba, itpm";
-  let query = supabase.from("crs").select(columns);
+  let query = db.from("crs").select(columns);
   if (crNumber) query = query.eq("cr_number", crNumber);
   const { data, error } = await query;
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return (data ?? [])
     .map((row) => ({
       row: row as unknown as CrRow,
@@ -49,7 +54,8 @@ export const getScopedCrs = createServerFn({ method: "GET" })
   .inputValidator((data: ScopedInput | undefined) => data ?? {})
   .handler(async ({ data }) => {
     const { userName, isAdmin } = await requireSessionUser();
-    const scoped = await loadScopedCrs(userName, isAdmin, data.crNumber);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const scoped = await loadScopedCrs(supabaseAdmin, userName, isAdmin, data.crNumber);
     if (data.crNumber) {
       const only = scoped[0];
       return only ? { ...only.row, relation: only.relation } : null;
@@ -69,17 +75,18 @@ export const getScopedKpiResults = createServerFn({ method: "GET" })
   .inputValidator((data: ScopedInput | undefined) => data ?? {})
   .handler(async ({ data }) => {
     const { userName, isAdmin } = await requireSessionUser();
-    const scoped = await loadScopedCrs(userName, isAdmin, data.crNumber);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const scoped = await loadScopedCrs(supabaseAdmin, userName, isAdmin, data.crNumber);
     if (scoped.length === 0) return [];
     const crMap = new Map(scoped.map((s) => [s.row.cr_number, s]));
-    const { data: results, error } = await supabase
+    const { data: results, error } = await supabaseAdmin
       .from("kpi_results")
       .select(
         "id, cr_number, start_date, end_date, working_days, hold_days, effective_days, tat, remaining_days, utilization_pct, status, kpis(id, name, role, start_status_code, end_status_code, warning_pct, small_tat, medium_tat, large_tat)",
       )
       .in("cr_number", Array.from(crMap.keys()))
       .order("utilization_pct", { ascending: false, nullsFirst: false });
-    if (error) throw error;
+    if (error) throw new Error(error.message);
     return (results ?? [])
       .filter((r) => roleAllowedForRelation(r.kpis?.role, crMap.get(r.cr_number)!.relation))
       .map((r) => {
@@ -96,22 +103,23 @@ export const getScopedDefects = createServerFn({ method: "GET" })
   .inputValidator((data: ScopedInput | undefined) => data ?? {})
   .handler(async ({ data }) => {
     const { userName, isAdmin } = await requireSessionUser();
-    const scoped = await loadScopedCrs(userName, isAdmin, data.crNumber);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const scoped = await loadScopedCrs(supabaseAdmin, userName, isAdmin, data.crNumber);
     // Admins see every defect, not just open ones; everyone else only sees
     // open defects on CRs where they're the ITPM (or BA+ITPM).
     const visible = isAdmin ? scoped : scoped.filter((s) => s.relation === "itpm" || s.relation === "both");
     if (visible.length === 0) return [];
     const crNumbers = visible.map((s) => s.row.cr_number);
     const [{ data: defects, error: dErr }, { data: mapping, error: mErr }] = await Promise.all([
-      supabase
+      supabaseAdmin
         .from("defects")
         .select("defect_no, summary, cr_number, new_status, date_created, date_modified")
         .in("cr_number", crNumbers)
         .order("date_created", { ascending: false }),
-      supabase.from("defect_status_mapping").select("status, is_open"),
+      supabaseAdmin.from("defect_status_mapping").select("status, is_open"),
     ]);
-    if (dErr) throw dErr;
-    if (mErr) throw mErr;
+    if (dErr) throw new Error(dErr.message);
+    if (mErr) throw new Error(mErr.message);
     if (isAdmin) return defects ?? [];
     const openSet = new Set((mapping ?? []).filter((m) => m.is_open).map((m) => m.status));
     return (defects ?? []).filter((d) => d.new_status && openSet.has(d.new_status));

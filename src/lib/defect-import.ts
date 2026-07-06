@@ -1,7 +1,13 @@
 // CSV → Defects importer.
 // Validates CR No against existing CRs; skips records with blank/unknown CR.
+//
+// Parsing happens client-side (Papa.parse needs the browser File object).
+// Everything DB-related happens in importDefectRows, a server function
+// using the service-role client — RLS on crs/defects is locked down, so
+// the anon client can no longer do any of this directly.
 import Papa from "papaparse";
-import { supabase } from "@/integrations/supabase/client";
+import { createServerFn } from "@tanstack/react-start";
+import { requireSessionUser } from "@/lib/gate.functions";
 
 const FIELD_MAP: Record<string, string> = {
   "Defect No": "defect_no",
@@ -46,6 +52,57 @@ export interface DefectImportResult {
   errors: string[];
 }
 
+const importDefectRows = createServerFn({ method: "POST" })
+  .inputValidator((data: { rows: Record<string, string>[] }) => data)
+  .handler(async ({ data: { rows } }): Promise<DefectImportResult> => {
+    await requireSessionUser();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Load all CR numbers for validation.
+    const { data: crsData, error: crsErr } = await supabaseAdmin.from("crs").select("cr_number");
+    if (crsErr) throw new Error(crsErr.message);
+    const crSet = new Set((crsData ?? []).map((c) => c.cr_number));
+
+    const errors: string[] = [];
+    let skipped = 0;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const upsertRows: any[] = [];
+
+    for (const row of rows) {
+      const cr = (row["CR No"] ?? "").trim();
+      if (!cr || !crSet.has(cr)) {
+        skipped++;
+        continue;
+      }
+      const defectNo = (row["Defect No"] ?? "").trim();
+      if (!defectNo) {
+        skipped++;
+        continue;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dbRow: Record<string, any> = {};
+      for (const [header, value] of Object.entries(row)) {
+        const col = FIELD_MAP[header?.trim()];
+        if (!col) continue;
+        dbRow[col] = DATE_COLS.has(col) ? parseDate(value) : (value?.trim() || null);
+      }
+      upsertRows.push(dbRow);
+    }
+
+    const chunkSize = 200;
+    let imported = 0;
+    for (let i = 0; i < upsertRows.length; i += chunkSize) {
+      const chunk = upsertRows.slice(i, i + chunkSize);
+      const { error } = await supabaseAdmin
+        .from("defects")
+        .upsert(chunk, { onConflict: "defect_no" });
+      if (error) errors.push(error.message);
+      else imported += chunk.length;
+    }
+
+    return { totalRows: rows.length, imported, skipped, errors };
+  });
+
 export async function importDefectCsv(file: File): Promise<DefectImportResult> {
   const parsed = await new Promise<Papa.ParseResult<Record<string, string>>>(
     (resolve, reject) => {
@@ -58,51 +115,9 @@ export async function importDefectCsv(file: File): Promise<DefectImportResult> {
     },
   );
 
-  const errors: string[] = parsed.errors.map((e) => `${e.row}: ${e.message}`);
-  const rows = parsed.data;
-
-  // Load all CR numbers for validation.
-  const { data: crsData, error: crsErr } = await supabase.from("crs").select("cr_number");
-  if (crsErr) throw crsErr;
-  const crSet = new Set((crsData ?? []).map((c) => c.cr_number));
-
-  let skipped = 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const upsertRows: any[] = [];
-
-  for (const row of rows) {
-    const cr = (row["CR No"] ?? "").trim();
-    if (!cr || !crSet.has(cr)) {
-      skipped++;
-      continue;
-    }
-    const defectNo = (row["Defect No"] ?? "").trim();
-    if (!defectNo) {
-      skipped++;
-      continue;
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const dbRow: Record<string, any> = {};
-    for (const [header, value] of Object.entries(row)) {
-      const col = FIELD_MAP[header?.trim()];
-      if (!col) continue;
-      dbRow[col] = DATE_COLS.has(col) ? parseDate(value) : (value?.trim() || null);
-    }
-    upsertRows.push(dbRow);
-  }
-
-  const chunkSize = 200;
-  let imported = 0;
-  for (let i = 0; i < upsertRows.length; i += chunkSize) {
-    const chunk = upsertRows.slice(i, i + chunkSize);
-    const { error } = await supabase
-      .from("defects")
-      .upsert(chunk, { onConflict: "defect_no" });
-    if (error) errors.push(error.message);
-    else imported += chunk.length;
-  }
-
-  return { totalRows: rows.length, imported, skipped, errors };
+  const parseErrors: string[] = parsed.errors.map((e) => `${e.row}: ${e.message}`);
+  const result = await importDefectRows({ data: { rows: parsed.data } });
+  return { ...result, errors: [...parseErrors, ...result.errors] };
 }
 
 // Compute open-defect stats per CR using the configured status mapping.
@@ -111,39 +126,13 @@ export interface DefectStats {
   maxAgingDays: number | null;
 }
 
-export async function loadDefectStatsByCr(): Promise<Map<string, DefectStats>> {
-  const [defectsRes, mapRes] = await Promise.all([
-    supabase.from("defects").select("cr_number, new_status, date_created"),
-    supabase.from("defect_status_mapping").select("status, is_open"),
-  ]);
-  if (defectsRes.error) throw defectsRes.error;
-  if (mapRes.error) throw mapRes.error;
-  const openSet = new Set(
-    (mapRes.data ?? []).filter((m) => m.is_open).map((m) => m.status),
-  );
-  const map = new Map<string, DefectStats>();
-  const now = Date.now();
-  for (const d of defectsRes.data ?? []) {
-    if (!d.new_status || !openSet.has(d.new_status)) continue;
-    const ageDays = d.date_created
-      ? Math.floor((now - new Date(d.date_created).getTime()) / 86400000)
-      : null;
-    const cur = map.get(d.cr_number) ?? { openCount: 0, maxAgingDays: null };
-    cur.openCount++;
-    if (ageDays != null && (cur.maxAgingDays == null || ageDays > cur.maxAgingDays)) {
-      cur.maxAgingDays = ageDays;
-    }
-    map.set(d.cr_number, cur);
-  }
-  return map;
-}
-
 export function isStatusOpen(status: string | null, openStatuses: Set<string>): boolean {
   return !!status && openStatuses.has(status);
 }
 
-// Same shape as loadDefectStatsByCr, but derived from an already-fetched
-// (already open-filtered) defect list — used with getScopedDefects().
+// Same shape as the old loadDefectStatsByCr, but derived from an
+// already-fetched (already open-filtered) defect list — used with
+// getScopedDefects() from scoped-data.functions.ts.
 export function aggregateDefectStats(
   openDefects: { cr_number: string; date_created: string | null }[],
 ): Map<string, DefectStats> {

@@ -1,10 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { RefreshKpiButton } from "@/components/refresh-kpi-button";
 import { KpiStatusBadge } from "@/components/kpi-status-badge";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -17,6 +21,7 @@ import { AlertTriangle, CircleCheck, CircleAlert, Database, Ruler, Bug, Clock } 
 import type { KpiStatusValue } from "@/lib/kpi-engine";
 import { aggregateDefectStats } from "@/lib/defect-import";
 import { getScopedCrs, getScopedKpiResults, getScopedDefects } from "@/lib/scoped-data.functions";
+import { useAppUser } from "@/lib/app-user";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Dashboard · Kpisavvy" }] }),
@@ -31,54 +36,123 @@ interface ResultRow {
   tat: number | null;
   remaining_days: number | null;
   utilization_pct: number | null;
-  kpis: { name: string } | null;
+  kpis: { name: string; role: string } | null;
   crs: { application: string | null; cr_size: string | null } | null;
 }
 
+interface CrListRow {
+  cr_number: string;
+  application: string | null;
+  cr_size: string | null;
+  ba: string | null;
+  itpm: string | null;
+}
+
 function Dashboard() {
-  const stats = useQuery({
-    queryKey: ["dashboard-stats"],
+  const { isAdmin } = useAppUser();
+  const [userFilter, setUserFilter] = useState("__all__");
+  const [appFilter, setAppFilter] = useState("__all__");
+
+  const raw = useQuery({
+    queryKey: ["dashboard-raw"],
     queryFn: async () => {
       const [crs, results, openDefectsList] = await Promise.all([
         getScopedCrs(),
         getScopedKpiResults(),
         getScopedDefects(),
       ]);
-      const crList = crs as unknown as { cr_number: string; cr_size: string | null }[];
-      const allResults = results as unknown as ResultRow[];
-      const defectStats = aggregateDefectStats(
-        openDefectsList as unknown as { cr_number: string; date_created: string | null }[],
-      );
-      const counts = { green: 0, amber: 0, red: 0, pending: 0, not_started: 0 };
-      for (const r of allResults) counts[r.status]++;
-      const nearBreach = allResults
-        .filter((r) => r.status === "amber")
-        .sort((a, b) => (b.utilization_pct ?? 0) - (a.utilization_pct ?? 0))
-        .slice(0, 10);
-      const breached = allResults
-        .filter((r) => r.status === "red")
-        .sort((a, b) => (b.utilization_pct ?? 0) - (a.utilization_pct ?? 0))
-        .slice(0, 10);
-      const pendingSize = crList.filter((c) => !c.cr_size).length;
-      let openDefects = 0;
-      let maxAging = 0;
-      for (const v of defectStats.values()) {
-        openDefects += v.openCount;
-        if (v.maxAgingDays != null && v.maxAgingDays > maxAging) maxAging = v.maxAgingDays;
-      }
       return {
-        activeCrs: crList.length,
-        pendingSize,
-        counts,
-        nearBreach,
-        breached,
-        openDefects,
-        maxAging,
+        crList: crs as unknown as CrListRow[],
+        allResults: results as unknown as ResultRow[],
+        openDefectsList: openDefectsList as unknown as { cr_number: string; date_created: string | null }[],
       };
     },
   });
 
-  const s = stats.data;
+  const userOpts = useMemo(() => {
+    const set = new Set<string>();
+    (raw.data?.crList ?? []).forEach((c) => {
+      if (c.ba) set.add(c.ba);
+      if (c.itpm) set.add(c.itpm);
+    });
+    return Array.from(set).sort();
+  }, [raw.data]);
+
+  const appOpts = useMemo(() => {
+    const set = new Set<string>();
+    (raw.data?.crList ?? []).forEach((c) => c.application && set.add(c.application));
+    return Array.from(set).sort();
+  }, [raw.data]);
+
+  const s = useMemo(() => {
+    if (!raw.data) return undefined;
+    const matches = (c: CrListRow) => {
+      if (userFilter !== "__all__" && c.ba !== userFilter && c.itpm !== userFilter) return false;
+      if (appFilter !== "__all__" && c.application !== appFilter) return false;
+      return true;
+    };
+    const crList = raw.data.crList.filter(matches);
+
+    // getScopedKpiResults()/getScopedDefects() hand Admin every role/CR
+    // unfiltered — narrowing to a specific user here has to redo the same
+    // per-CR role/relation restriction that non-admin sessions get for
+    // free (BA-only -> BA KPIs & no defects, ITPM-only -> ITPM KPIs +
+    // defects, both -> everything), otherwise the "User" filter only
+    // narrows which CRs show up, not which role's data shows for them.
+    type Relation = "ba" | "itpm" | "both";
+    const relationByCr = new Map<string, Relation>();
+    if (userFilter !== "__all__") {
+      for (const c of crList) {
+        const isBa = c.ba === userFilter;
+        const isItpm = c.itpm === userFilter;
+        if (isBa && isItpm) relationByCr.set(c.cr_number, "both");
+        else if (isBa) relationByCr.set(c.cr_number, "ba");
+        else if (isItpm) relationByCr.set(c.cr_number, "itpm");
+      }
+    }
+
+    const crNumbers = new Set(crList.map((c) => c.cr_number));
+    const allResults = raw.data.allResults.filter((r) => {
+      if (!crNumbers.has(r.cr_number)) return false;
+      const relation = relationByCr.get(r.cr_number);
+      if (!relation || relation === "both") return true;
+      return r.kpis?.role === (relation === "ba" ? "BA" : "ITPM");
+    });
+    const openDefectsList = raw.data.openDefectsList.filter((d) => {
+      if (!crNumbers.has(d.cr_number)) return false;
+      const relation = relationByCr.get(d.cr_number);
+      if (!relation) return true;
+      return relation === "itpm" || relation === "both";
+    });
+
+    const defectStats = aggregateDefectStats(openDefectsList);
+    const counts = { green: 0, amber: 0, red: 0, pending: 0, not_started: 0 };
+    for (const r of allResults) counts[r.status]++;
+    const nearBreach = allResults
+      .filter((r) => r.status === "amber")
+      .sort((a, b) => (b.utilization_pct ?? 0) - (a.utilization_pct ?? 0))
+      .slice(0, 10);
+    const breached = allResults
+      .filter((r) => r.status === "red")
+      .sort((a, b) => (b.utilization_pct ?? 0) - (a.utilization_pct ?? 0))
+      .slice(0, 10);
+    const pendingSize = crList.filter((c) => !c.cr_size).length;
+    let openDefects = 0;
+    let maxAging = 0;
+    for (const v of defectStats.values()) {
+      openDefects += v.openCount;
+      if (v.maxAgingDays != null && v.maxAgingDays > maxAging) maxAging = v.maxAgingDays;
+    }
+    return {
+      activeCrs: crList.length,
+      pendingSize,
+      counts,
+      nearBreach,
+      breached,
+      openDefects,
+      maxAging,
+    };
+  }, [raw.data, userFilter, appFilter]);
 
   return (
     <AppShell>
@@ -88,6 +162,24 @@ function Dashboard() {
         actions={<RefreshKpiButton />}
       />
       <PageBody>
+        {isAdmin && (
+          <Card>
+            <CardContent className="p-4 flex flex-wrap gap-3">
+              <Filter
+                label="User"
+                value={userFilter}
+                setValue={setUserFilter}
+                options={[{ v: "__all__", l: "All users" }, ...userOpts.map((u) => ({ v: u, l: u }))]}
+              />
+              <Filter
+                label="Application"
+                value={appFilter}
+                setValue={setAppFilter}
+                options={[{ v: "__all__", l: "All applications" }, ...appOpts.map((a) => ({ v: a, l: a }))]}
+              />
+            </CardContent>
+          </Card>
+        )}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCard label="Active CRs" value={s?.activeCrs ?? 0} icon={<Database className="size-4" />} to="/crs" />
           <StatCard
@@ -177,6 +269,27 @@ function StatCard({
     );
   }
   return content;
+}
+
+function Filter({
+  label, value, setValue, options,
+}: {
+  label: string;
+  value: string;
+  setValue: (v: string) => void;
+  options: { v: string; l: string }[];
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <Select value={value} onValueChange={setValue}>
+        <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {options.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
 }
 
 function KpiTable({

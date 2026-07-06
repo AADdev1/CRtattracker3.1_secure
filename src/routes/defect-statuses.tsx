@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,9 @@ import {
 } from "@/components/ui/table";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  listDefectStatusMapping, listUnmappedDefectStatuses, toggleDefectStatusOpen, addDefectStatus, removeDefectStatus,
+} from "@/lib/defect-status.functions";
 
 export const Route = createFileRoute("/defect-statuses")({
   head: () => ({ meta: [{ title: "Defect Status Mapping · Kpisavvy" }] }),
@@ -24,31 +26,18 @@ function DefectStatusMapping() {
 
   const mapping = useQuery({
     queryKey: ["defect-status-mapping"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("defect_status_mapping")
-        .select("id, status, is_open")
-        .order("is_open", { ascending: false })
-        .order("status");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => listDefectStatusMapping(),
   });
 
   // Also surface statuses that exist in defects but aren't mapped yet.
   const unmapped = useQuery({
     queryKey: ["defect-unmapped-statuses"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("defects").select("new_status");
-      if (error) throw error;
-      return Array.from(new Set((data ?? []).map((d) => d.new_status).filter(Boolean) as string[]));
-    },
+    queryFn: () => listUnmappedDefectStatuses(),
   });
 
   const toggle = useMutation({
     mutationFn: async ({ id, is_open }: { id: string; is_open: boolean }) => {
-      const { error } = await supabase.from("defect_status_mapping").update({ is_open }).eq("id", id);
-      if (error) throw error;
+      await toggleDefectStatusOpen({ data: { id, is_open } });
     },
     onSuccess: () => qc.invalidateQueries(),
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : String(e)),
@@ -56,10 +45,7 @@ function DefectStatusMapping() {
 
   const add = useMutation({
     mutationFn: async (status: string) => {
-      const { error } = await supabase
-        .from("defect_status_mapping")
-        .insert({ status, is_open: true });
-      if (error) throw error;
+      await addDefectStatus({ data: { status } });
     },
     onSuccess: () => {
       setNewStatus("");
@@ -71,8 +57,7 @@ function DefectStatusMapping() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("defect_status_mapping").delete().eq("id", id);
-      if (error) throw error;
+      await removeDefectStatus({ data: { id } });
     },
     onSuccess: () => qc.invalidateQueries(),
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : String(e)),

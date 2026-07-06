@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { buildTimeline, type CrRow, type WorkflowStatusRow } from "@/lib/kpi-engine";
 import { getScopedCrs, getScopedKpiResults, getScopedDefects, type CrRelation } from "@/lib/scoped-data.functions";
+import { getWorkflowStatuses } from "@/lib/workflow-statuses.functions";
 import type { Database } from "@/integrations/supabase/types";
 
 type CrDetailRow = Database["public"]["Tables"]["crs"]["Row"] & { relation: CrRelation };
@@ -26,16 +26,15 @@ function CrDetails() {
   const data = useQuery({
     queryKey: ["cr-details", crNumber],
     queryFn: async () => {
-      const [cr, statusRes, results, defects] = await Promise.all([
+      const [cr, statuses, results, defects] = await Promise.all([
         getScopedCrs({ data: { crNumber } }),
-        supabase.from("workflow_statuses").select("*").order("sort_order"),
+        getWorkflowStatuses(),
         getScopedKpiResults({ data: { crNumber } }),
         getScopedDefects({ data: { crNumber } }),
       ]);
-      if (statusRes.error) throw statusRes.error;
       return {
         cr: cr as CrDetailRow | null,
-        statuses: statusRes.data ?? [],
+        statuses: statuses ?? [],
         results: results ?? [],
         defects: defects ?? [],
       };

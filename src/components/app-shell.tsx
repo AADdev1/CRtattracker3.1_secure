@@ -1,5 +1,4 @@
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import {
   LayoutDashboard,
   Upload,
@@ -11,17 +10,20 @@ import {
   Bug,
   Calculator,
   LogOut,
+  UserPlus,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { logoutUser } from "@/lib/gate.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { useAppUser } from "@/lib/app-user";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/upload", label: "Data Import", icon: Upload },
   { to: "/crs", label: "CR Repository", icon: Database },
   { to: "/cr-sizes", label: "CR Size Management", icon: Ruler },
+  { to: "/cr-allocation", label: "CR Allocation", icon: UserPlus, requiresAllocationAccess: true },
   { to: "/kpis", label: "KPI Configuration", icon: Settings2 },
   { to: "/defect-statuses", label: "Defect Status Mapping", icon: Bug },
   { to: "/worklist", label: "KPI Worklist", icon: ListChecks },
@@ -31,9 +33,10 @@ const nav = [
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const router = useRouter();
-  const logout = useServerFn(logoutUser);
+  const { userName, isAdmin, role } = useAppUser();
+  const canSeeAllocation = isAdmin || role != null;
   async function onLogout() {
-    await logout({});
+    await supabase.auth.signOut();
     router.invalidate();
     await router.navigate({ to: "/auth" });
   }
@@ -46,8 +49,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Activity className="size-5" />
             </div>
             <div>
-              <div className="font-semibold text-base leading-tight">Kpisavvy</div>
-              <div className="text-xs text-sidebar-foreground/60">KPI Engine</div>
+              <div className="font-semibold text-xl leading-tight">Kpisavvy</div>
+              {userName && (
+                <div className="text-base text-sidebar-foreground/60 truncate max-w-40">
+                  {userName}
+                  {isAdmin ? " · Admin" : ""}
+                </div>
+              )}
             </div>
           </div>
           <Button
@@ -62,6 +70,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
           {nav.map((item) => {
+            if ("requiresAllocationAccess" in item && !canSeeAllocation) return null;
             const Icon = item.icon;
             const active =
               item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);

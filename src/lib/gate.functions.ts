@@ -1,103 +1,71 @@
 import { createServerFn, createServerOnlyFn } from "@tanstack/react-start";
-import { useSession } from "@tanstack/react-start/server";
-import { createHash, timingSafeEqual } from "node:crypto";
-import { supabase } from "@/integrations/supabase/client";
+import { getRequest } from "@tanstack/react-start/server";
+import { createClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
 
-type GateSession = { unlocked?: boolean; email?: string; userName?: string; isAdmin?: boolean };
+// Verifies the real Supabase Auth Bearer JWT (attached automatically to
+// every server-fn call by attachSupabaseAuth — see start.ts), then looks
+// up user_management by the verified email for the BA/ITPM display name
+// and admin flag. Every scoped server function built on top of this
+// (scoped-data.functions.ts, kpi-engine.ts, etc.) depends on this exact
+// return shape — keep it stable.
+// Wrapped in createServerOnlyFn so the build keeps its
+// @tanstack/react-start/server import out of the client bundle (this file
+// is reachable from route/component code).
+export type StaffRole = "BA" | "ITPM" | "PMO";
 
-function getSessionConfig() {
-  const secret = process.env.SESSION_SECRET;
-  if (!secret) throw new Error("SESSION_SECRET is not set");
-  return {
-    password: secret,
-    name: "kpisavvy-session",
-    maxAge: 60 * 60 * 24 * 7,
-    cookie: { httpOnly: true, secure: true, sameSite: "lax" as const, path: "/" },
-  };
-}
-
-function matches(a: string, b: string): boolean {
-  const ha = createHash("sha256").update(a, "utf8").digest();
-  const hb = createHash("sha256").update(b, "utf8").digest();
-  return timingSafeEqual(ha, hb);
-}
-
-// Interim auth: credentials come from env vars (AUTH_USER1_*, AUTH_USER2_*, ...),
-// the display name used to match crs.ba / crs.itpm comes from user_management.
-// Real Supabase Auth is deferred until later.
-function getConfiguredUsers(): { email: string; password: string }[] {
-  const users: { email: string; password: string }[] = [];
-  for (let i = 1; ; i++) {
-    const email = process.env[`AUTH_USER${i}_EMAIL`];
-    const password = process.env[`AUTH_USER${i}_PASSWORD`];
-    if (!email || !password) break;
-    users.push({ email: email.trim().toLowerCase(), password });
-  }
-  return users;
-}
-
-export const loginUser = createServerFn({ method: "POST" })
-  .inputValidator((data: { email: string; password: string }) => data)
-  .handler(async ({ data }) => {
-    const users = getConfiguredUsers();
-    if (users.length === 0) {
-      throw new Error("Auth env vars are not configured");
-    }
-    const submittedEmail = data.email.trim().toLowerCase();
-    const match = users.find((u) => matches(u.email, submittedEmail));
-    if (!match || !matches(match.password, data.password)) {
-      return { ok: false as const };
-    }
-
-    const { data: profile, error } = await supabase
-      .from("user_management")
-      .select("user_name, is_active, is_admin")
-      .eq("email", match.email)
-      .maybeSingle();
-    if (error || !profile || !profile.is_active) {
-      return { ok: false as const };
-    }
-
-    const session = await useSession<GateSession>(getSessionConfig());
-    await session.update({
-      unlocked: true,
-      email: match.email,
-      userName: profile.user_name,
-      isAdmin: profile.is_admin,
-    });
-    return { ok: true as const };
-  });
-
-export const logoutUser = createServerFn({ method: "POST" }).handler(async () => {
-  const session = await useSession<GateSession>(getSessionConfig());
-  await session.clear();
-  return { ok: true as const };
-});
-
-export const getAuthState = createServerFn({ method: "GET" }).handler(async () => {
-  const session = await useSession<GateSession>(getSessionConfig());
-  return {
-    unlocked: Boolean(session.data.unlocked),
-    email: session.data.email ?? null,
-    userName: session.data.userName ?? null,
-    isAdmin: Boolean(session.data.isAdmin),
-  };
-});
-
-// For other server functions (see scoped-data.functions.ts) that need to know
-// who's logged in without duplicating the session/cookie config. Wrapped in
-// createServerOnlyFn so the build keeps its @tanstack/react-start/server
-// import out of the client bundle (this file is reachable from __root.tsx).
 export const requireSessionUser = createServerOnlyFn(
-  async (): Promise<{ email: string; userName: string; isAdmin: boolean }> => {
-    const session = await useSession<GateSession>(getSessionConfig());
-    if (!session.data.unlocked || !session.data.email || !session.data.userName) {
+  async (): Promise<{ email: string; userName: string; isAdmin: boolean; role: StaffRole | null }> => {
+    const request = getRequest();
+    const authHeader = request?.headers.get("authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       throw new Error("Unauthorized");
     }
-    return {
-      email: session.data.email,
-      userName: session.data.userName,
-      isAdmin: Boolean(session.data.isAdmin),
-    };
+    const token = authHeader.slice("Bearer ".length);
+
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
+    if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+      throw new Error("Supabase environment variables are not configured");
+    }
+
+    const scopedClient = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: claimsData, error: claimsError } = await scopedClient.auth.getClaims(token);
+    const email = claimsData?.claims?.email;
+    if (claimsError || !email) {
+      throw new Error("Unauthorized");
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("user_management")
+      .select("user_name, is_active, is_admin, role")
+      .eq("email", email.trim().toLowerCase())
+      .maybeSingle();
+    if (profileError || !profile || !profile.is_active) {
+      throw new Error("Unauthorized");
+    }
+
+    return { email, userName: profile.user_name, isAdmin: profile.is_admin, role: profile.role };
   },
 );
+
+// Non-throwing wrapper for UI display (useAppUser / app-shell) — same
+// shape the interim cookie-based version used, so callers need no changes.
+export const getAuthState = createServerFn({ method: "GET" }).handler(async () => {
+  try {
+    const user = await requireSessionUser();
+    return {
+      unlocked: true,
+      email: user.email,
+      userName: user.userName,
+      isAdmin: user.isAdmin,
+      role: user.role,
+    };
+  } catch {
+    return { unlocked: false, email: null, userName: null, isAdmin: false, role: null };
+  }
+});

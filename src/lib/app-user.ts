@@ -3,6 +3,7 @@
 // identity path that isn't wired up yet.
 import { useQuery } from "@tanstack/react-query";
 import { getAuthState } from "@/lib/gate.functions";
+import type { StaffRole } from "@/lib/gate.functions";
 
 export function useAppUser() {
   const query = useQuery({
@@ -13,6 +14,7 @@ export function useAppUser() {
     email: query.data?.email ?? null,
     userName: query.data?.userName ?? null,
     isAdmin: query.data?.isAdmin ?? false,
+    role: (query.data?.role ?? null) as StaffRole | null,
     isLoading: query.isLoading,
   };
 }

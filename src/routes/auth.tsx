@@ -1,12 +1,12 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Activity, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { loginUser } from "@/lib/gate.functions";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -14,7 +14,7 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const router = useRouter();
-  const login = useServerFn(loginUser);
+  const qc = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -23,13 +23,18 @@ function AuthPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const res = await login({ data: { email, password } });
-      if (res.ok) {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        toast.error(error.message);
+      } else {
+        // CurrentUserProvider caches the signed-out state under this key.
+        // Wait for it to refetch with the new session before navigating —
+        // otherwise the stale cached "no session" briefly bounces us back
+        // to /auth right after landing on "/".
+        await qc.invalidateQueries({ queryKey: ["current-user"] });
         toast.success("Signed in");
         await router.navigate({ to: "/" });
         router.invalidate();
-      } else {
-        toast.error("Invalid email or password");
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sign-in failed");

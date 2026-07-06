@@ -6,14 +6,13 @@ import {
   useRouter,
   HeadContent,
   Scripts,
-  redirect,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
-import { getAuthState } from "@/lib/gate.functions";
+import { CurrentUserProvider } from "@/lib/current-user";
 
 function NotFoundComponent() {
   return (
@@ -76,13 +75,6 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  beforeLoad: async ({ location }) => {
-    if (location.pathname === "/auth") return;
-    const state = await getAuthState();
-    if (!state.unlocked) {
-      throw redirect({ to: "/auth" });
-    }
-  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -104,6 +96,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
+      { rel: "icon", type: "image/png", href: "/favicon.png" },
     ],
   }),
   shellComponent: RootShell,
@@ -131,8 +124,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <CurrentUserProvider>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+      </CurrentUserProvider>
       <Toaster richColors position="top-right" />
     </QueryClientProvider>
   );

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 export function RefreshKpiButton() {
   const qc = useQueryClient();
   const m = useMutation({
-    mutationFn: recalculateAllKpis,
+    mutationFn: () => recalculateAllKpis(),
     onSuccess: (r) => {
       toast.success(
         `KPI Engine ran: ${r.resultsWritten} result(s) for ${r.crsProcessed} CRs × ${r.kpisProcessed} KPIs.`,

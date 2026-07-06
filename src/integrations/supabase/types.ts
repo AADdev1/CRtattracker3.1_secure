@@ -32,6 +32,7 @@ export type Database = {
           department: string | null
           expected_go_live_date: string | null
           hod: string | null
+          is_dropped: boolean
           it_vertical_head: string | null
           itpm: string | null
           kom: string | null
@@ -115,6 +116,7 @@ export type Database = {
           department?: string | null
           expected_go_live_date?: string | null
           hod?: string | null
+          is_dropped?: boolean
           it_vertical_head?: string | null
           itpm?: string | null
           kom?: string | null
@@ -198,6 +200,7 @@ export type Database = {
           department?: string | null
           expected_go_live_date?: string | null
           hod?: string | null
+          is_dropped?: boolean
           it_vertical_head?: string | null
           itpm?: string | null
           kom?: string | null
@@ -516,6 +519,51 @@ export type Database = {
           },
         ]
       }
+      kpi_engine_lock: {
+        Row: {
+          id: string
+          is_running: boolean
+          started_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          is_running?: boolean
+          started_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          is_running?: boolean
+          started_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_management: {
         Row: {
           created_at: string
@@ -524,6 +572,7 @@ export type Database = {
           is_active: boolean
           is_admin: boolean
           password_hash: string | null
+          role: Database["public"]["Enums"]["staff_role"] | null
           updated_at: string
           user_name: string
         }
@@ -534,6 +583,7 @@ export type Database = {
           is_active?: boolean
           is_admin?: boolean
           password_hash?: string | null
+          role?: Database["public"]["Enums"]["staff_role"] | null
           updated_at?: string
           user_name: string
         }
@@ -544,6 +594,7 @@ export type Database = {
           is_active?: boolean
           is_admin?: boolean
           password_hash?: string | null
+          role?: Database["public"]["Enums"]["staff_role"] | null
           updated_at?: string
           user_name?: string
         }
@@ -590,9 +641,11 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      app_role: "ITPM" | "BA" | "Admin"
       cr_size: "Small" | "Medium" | "Large"
       kpi_role: "ITPM" | "BA"
       kpi_status: "pending" | "not_started" | "green" | "amber" | "red"
+      staff_role: "BA" | "ITPM" | "PMO"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -720,9 +773,11 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["ITPM", "BA", "Admin"],
       cr_size: ["Small", "Medium", "Large"],
       kpi_role: ["ITPM", "BA"],
       kpi_status: ["pending", "not_started", "green", "amber", "red"],
+      staff_role: ["BA", "ITPM", "PMO"],
     },
   },
 } as const

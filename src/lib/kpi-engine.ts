@@ -4,7 +4,8 @@
 // Hold days are counted as CALENDAR days inside excluded statuses
 // (per Phase 1 spec). Multiple hold→resume cycles are supported.
 // =============================================================================
-import { supabase } from "@/integrations/supabase/client";
+import { createServerFn } from "@tanstack/react-start";
+import { requireSessionUser } from "@/lib/gate.functions";
 
 export type CrSize = "Small" | "Medium" | "Large";
 export type KpiStatusValue = "pending" | "not_started" | "green" | "amber" | "red";
@@ -209,93 +210,149 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/**
- * Recalculate every active KPI for every CR. This is the ONLY function that
- * writes to public.kpi_results. Dashboards/worklists read from there.
- */
-export async function recalculateAllKpis(): Promise<{
-  crsProcessed: number;
-  kpisProcessed: number;
-  resultsWritten: number;
-}> {
-  const [{ data: statuses }, { data: kpis }, { data: crs }, { data: excl }] =
-    await Promise.all([
-      supabase.from("workflow_statuses").select("*").order("sort_order"),
-      supabase.from("kpis").select("*").eq("is_active", true),
-      supabase.from("crs").select("*"),
-      supabase.from("kpi_excluded_statuses").select("kpi_id, workflow_status_code"),
-    ]);
+const LOCK_STALE_MS = 5 * 60 * 1000;
 
-  if (!statuses || !kpis || !crs) {
-    throw new Error("Failed to load engine inputs");
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function acquireKpiEngineLock(supabaseAdmin: any): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const staleCutoff = new Date(Date.now() - LOCK_STALE_MS).toISOString();
+  const { data: claimed, error } = await supabaseAdmin
+    .from("kpi_engine_lock")
+    .update({ is_running: true, started_at: nowIso, updated_at: nowIso })
+    .eq("id", "singleton")
+    .or(`is_running.eq.false,started_at.lt.${staleCutoff}`)
+    .select("id");
+  if (error) throw new Error(error.message);
+  if (!claimed || claimed.length === 0) {
+    throw new Error("The KPI engine is already running from another request. Please try again shortly.");
   }
-
-  const exclByKpi = groupExcluded(excl ?? []);
-
-  const results: KpiCalcResult[] = [];
-  for (const cr of crs as unknown as CrRow[]) {
-    const timeline = buildTimeline(cr, statuses as unknown as WorkflowStatusRow[]);
-    for (const kpi of kpis as unknown as KpiRow[]) {
-      results.push(calcKpi(cr, kpi, timeline, exclByKpi.get(kpi.id) ?? new Set()));
-    }
-  }
-
-  if (results.length === 0) {
-    return { crsProcessed: crs.length, kpisProcessed: kpis.length, resultsWritten: 0 };
-  }
-
-  // Clear stale results for these CR×KPI pairs, then re-insert.
-  // Simpler: delete all results for the CRs we just processed, then insert fresh.
-  const crNumbers = (crs as { cr_number: string }[]).map((c) => c.cr_number);
-  if (crNumbers.length > 0) {
-    const { error: delErr } = await supabase
-      .from("kpi_results")
-      .delete()
-      .in("cr_number", crNumbers);
-    if (delErr) throw delErr;
-  }
-
-  // Chunked insert to avoid payload limits.
-  const chunkSize = 500;
-  for (let i = 0; i < results.length; i += chunkSize) {
-    const chunk = results.slice(i, i + chunkSize);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await supabase.from("kpi_results").insert(chunk as any);
-    if (error) throw error;
-  }
-
-  return {
-    crsProcessed: crs.length,
-    kpisProcessed: kpis.length,
-    resultsWritten: results.length,
-  };
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function releaseKpiEngineLock(supabaseAdmin: any): Promise<void> {
+  await supabaseAdmin
+    .from("kpi_engine_lock")
+    .update({ is_running: false, updated_at: new Date().toISOString() })
+    .eq("id", "singleton");
+}
+
+/**
+ * Recalculate every active KPI for every CR the caller can see: all of them
+ * for an Admin, or only CRs where the caller is the BA or ITPM otherwise.
+ * KPI *role* filtering (BA-only sees BA KPIs, etc.) still happens only at
+ * read time in getScopedKpiResults — this just narrows which CRs get
+ * touched, so both roles' results stay correct for the CRs it does process.
+ * This is the ONLY function that writes to public.kpi_results. Dashboards/
+ * worklists read from there.
+ * Guarded by kpi_engine_lock so at most one run can be in flight at once —
+ * with ~300 CRs x 14+ KPIs, overlapping runs would double the DB load and
+ * can throw duplicate-key errors if their delete/insert steps interleave.
+ */
+export const recalculateAllKpis = createServerFn({ method: "POST" }).handler(
+  async (): Promise<{
+    crsProcessed: number;
+    kpisProcessed: number;
+    resultsWritten: number;
+  }> => {
+    const { userName, isAdmin } = await requireSessionUser();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await acquireKpiEngineLock(supabaseAdmin);
+    try {
+      const [{ data: statuses }, { data: kpis }, { data: allCrs }, { data: excl }] =
+        await Promise.all([
+          supabaseAdmin.from("workflow_statuses").select("*").order("sort_order"),
+          supabaseAdmin.from("kpis").select("*").eq("is_active", true),
+          supabaseAdmin.from("crs").select("*"),
+          supabaseAdmin.from("kpi_excluded_statuses").select("kpi_id, workflow_status_code"),
+        ]);
+
+      if (!statuses || !kpis || !allCrs) {
+        throw new Error("Failed to load engine inputs");
+      }
+
+      const crs = isAdmin
+        ? (allCrs as unknown as CrRow[])
+        : (allCrs as unknown as CrRow[]).filter((cr) => cr.ba === userName || cr.itpm === userName);
+
+      // Dropped CRs are excluded from KPI calculation entirely — no
+      // kpi_results rows are computed or kept for them (see below, their
+      // stale results still get deleted, just never reinserted).
+      const activeCrs = crs.filter((cr) => !cr.is_dropped);
+
+      const exclByKpi = groupExcluded(excl ?? []);
+
+      const results: KpiCalcResult[] = [];
+      for (const cr of activeCrs) {
+        const timeline = buildTimeline(cr, statuses as unknown as WorkflowStatusRow[]);
+        for (const kpi of kpis as unknown as KpiRow[]) {
+          results.push(calcKpi(cr, kpi, timeline, exclByKpi.get(kpi.id) ?? new Set()));
+        }
+      }
+
+      // Clear stale results for every CR in scope (active AND dropped), then
+      // re-insert only for the active ones.
+      const crNumbers = crs.map((c) => c.cr_number);
+      if (crNumbers.length > 0) {
+        const { error: delErr } = await supabaseAdmin
+          .from("kpi_results")
+          .delete()
+          .in("cr_number", crNumbers);
+        if (delErr) throw new Error(delErr.message);
+      }
+
+      // Chunked insert to avoid payload limits.
+      const chunkSize = 500;
+      for (let i = 0; i < results.length; i += chunkSize) {
+        const chunk = results.slice(i, i + chunkSize);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await supabaseAdmin.from("kpi_results").insert(chunk as any);
+        if (error) throw new Error(error.message);
+      }
+
+      return {
+        crsProcessed: activeCrs.length,
+        kpisProcessed: kpis.length,
+        resultsWritten: results.length,
+      };
+    } finally {
+      await releaseKpiEngineLock(supabaseAdmin);
+    }
+  },
+);
 
 /**
  * Recalculate KPIs for a single CR (used after editing CR size or notes).
  */
-export async function recalculateForCr(crNumber: string): Promise<void> {
-  const [{ data: statuses }, { data: kpis }, { data: cr }, { data: excl }] =
-    await Promise.all([
-      supabase.from("workflow_statuses").select("*").order("sort_order"),
-      supabase.from("kpis").select("*").eq("is_active", true),
-      supabase.from("crs").select("*").eq("cr_number", crNumber).maybeSingle(),
-      supabase.from("kpi_excluded_statuses").select("kpi_id, workflow_status_code"),
-    ]);
-  if (!statuses || !kpis || !cr) return;
+export const recalculateForCr = createServerFn({ method: "POST" })
+  .inputValidator((crNumber: string) => crNumber)
+  .handler(async ({ data: crNumber }): Promise<void> => {
+    await requireSessionUser();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [{ data: statuses }, { data: kpis }, { data: cr }, { data: excl }] =
+      await Promise.all([
+        supabaseAdmin.from("workflow_statuses").select("*").order("sort_order"),
+        supabaseAdmin.from("kpis").select("*").eq("is_active", true),
+        supabaseAdmin.from("crs").select("*").eq("cr_number", crNumber).maybeSingle(),
+        supabaseAdmin.from("kpi_excluded_statuses").select("kpi_id, workflow_status_code"),
+      ]);
+    if (!statuses || !kpis || !cr) return;
 
-  const exclByKpi = groupExcluded(excl ?? []);
-  const timeline = buildTimeline(cr as unknown as CrRow, statuses as unknown as WorkflowStatusRow[]);
-  const results = (kpis as unknown as KpiRow[]).map((k) =>
-    calcKpi(cr as unknown as CrRow, k, timeline, exclByKpi.get(k.id) ?? new Set()),
-  );
+    await supabaseAdmin.from("kpi_results").delete().eq("cr_number", crNumber);
+    // Dropped CRs are excluded from KPI calculation entirely — their stale
+    // results are cleared above, but nothing gets recomputed for them.
+    if ((cr as unknown as CrRow).is_dropped) return;
 
-  await supabase.from("kpi_results").delete().eq("cr_number", crNumber);
-  if (results.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await supabase.from("kpi_results").insert(results as any);
-  }
-}
+    const exclByKpi = groupExcluded(excl ?? []);
+    const timeline = buildTimeline(cr as unknown as CrRow, statuses as unknown as WorkflowStatusRow[]);
+    const results = (kpis as unknown as KpiRow[]).map((k) =>
+      calcKpi(cr as unknown as CrRow, k, timeline, exclByKpi.get(k.id) ?? new Set()),
+    );
+
+    if (results.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await supabaseAdmin.from("kpi_results").insert(results as any);
+    }
+  });
 
 function groupExcluded(
   rows: { kpi_id: string; workflow_status_code: string }[],

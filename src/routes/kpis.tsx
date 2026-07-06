@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +16,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { recalculateAllKpis } from "@/lib/kpi-engine";
+import { getWorkflowStatuses } from "@/lib/workflow-statuses.functions";
+import { listKpis, listKpiExcludedStatuses, saveKpi, deleteKpi } from "@/lib/kpi-config.functions";
 
 export const Route = createFileRoute("/kpis")({
   head: () => ({ meta: [{ title: "KPI Configuration · Kpisavvy" }] }),
@@ -56,32 +57,15 @@ function KpiConfigPage() {
 
   const kpis = useQuery({
     queryKey: ["kpis"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("kpis").select("*").order("name");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => listKpis(),
   });
   const statuses = useQuery({
     queryKey: ["workflow-statuses"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("workflow_statuses")
-        .select("code, label")
-        .order("sort_order");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => getWorkflowStatuses(),
   });
   const excluded = useQuery({
     queryKey: ["kpi-excluded-statuses"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("kpi_excluded_statuses")
-        .select("kpi_id, workflow_status_code");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => listKpiExcludedStatuses(),
   });
 
   const exclByKpi = (() => {
@@ -96,33 +80,7 @@ function KpiConfigPage() {
 
   const save = useMutation({
     mutationFn: async (form: KpiForm) => {
-      if (!form.name || !form.start_status_code || !form.end_status_code) {
-        throw new Error("Name, Start Status and End Status are required");
-      }
-      const { excluded_status_codes, id, ...payload } = form;
-      let kpiId = id;
-      if (kpiId) {
-        const { error } = await supabase.from("kpis").update(payload).eq("id", kpiId);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase.from("kpis").insert(payload).select("id").single();
-        if (error) throw error;
-        kpiId = data.id;
-      }
-      // Replace excluded-status mapping for this KPI.
-      const { error: delErr } = await supabase
-        .from("kpi_excluded_statuses")
-        .delete()
-        .eq("kpi_id", kpiId!);
-      if (delErr) throw delErr;
-      if (excluded_status_codes.length > 0) {
-        const rows = excluded_status_codes.map((code) => ({
-          kpi_id: kpiId!,
-          workflow_status_code: code,
-        }));
-        const { error: insErr } = await supabase.from("kpi_excluded_statuses").insert(rows);
-        if (insErr) throw insErr;
-      }
+      await saveKpi({ data: form });
       await recalculateAllKpis();
     },
     onSuccess: () => {
@@ -136,8 +94,7 @@ function KpiConfigPage() {
 
   const del = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("kpis").delete().eq("id", id);
-      if (error) throw error;
+      await deleteKpi({ data: { id } });
     },
     onSuccess: () => {
       qc.invalidateQueries();

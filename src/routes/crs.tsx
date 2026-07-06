@@ -1,7 +1,6 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,6 +19,8 @@ import { toast } from "sonner";
 import { recalculateForCr } from "@/lib/kpi-engine";
 import { aggregateDefectStats } from "@/lib/defect-import";
 import { getScopedCrs, getScopedDefects } from "@/lib/scoped-data.functions";
+import { getWorkflowStatuses } from "@/lib/workflow-statuses.functions";
+import { updateCrWorkflowStatus } from "@/lib/crs-admin.functions";
 
 export const Route = createFileRoute("/crs")({
   head: () => ({ meta: [{ title: "CR Repository · Kpisavvy" }] }),
@@ -47,32 +48,15 @@ function CrRepository() {
 
   const wfStatuses = useQuery({
     queryKey: ["workflow-statuses-all"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("workflow_statuses")
-        .select("code, label, db_column, sort_order")
-        .order("sort_order", { ascending: true });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => getWorkflowStatuses(),
   });
 
   const updateStatus = useMutation({
     mutationFn: async ({ crNumber, code }: { crNumber: string; code: string }) => {
       const s = (wfStatuses.data ?? []).find((w) => w.code === code);
       if (!s) throw new Error("Unknown status");
-      const nowIso = new Date().toISOString();
-      const payload: Record<string, unknown> = {
-        workflow_status: s.label,
-        date_modified: nowIso,
-        [s.db_column]: nowIso,
-      };
-      const { error } = await supabase
-        .from("crs")
-        .update(payload as never)
-        .eq("cr_number", crNumber);
-      if (error) throw error;
-      await recalculateForCr(crNumber);
+      await updateCrWorkflowStatus({ data: { crNumber, dbColumn: s.db_column, label: s.label } });
+      await recalculateForCr({ data: crNumber });
     },
     onSuccess: () => {
       toast.success("Status updated");
