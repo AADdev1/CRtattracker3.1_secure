@@ -37,7 +37,7 @@ async function loadScopedCrs(
 ) {
   const columns = crNumber
     ? "*"
-    : "cr_number, title, application, severity, workflow_status, cr_size, date_created, date_modified, ba, itpm";
+    : "cr_number, title, application, severity, workflow_status, cr_size, date_created, date_modified, ba, itpm, testing_percentage";
   let query = db.from("crs").select(columns);
   if (crNumber) query = query.eq("cr_number", crNumber);
   const { data, error } = await query;

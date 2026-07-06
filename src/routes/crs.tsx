@@ -20,7 +20,8 @@ import { recalculateForCr } from "@/lib/kpi-engine";
 import { aggregateDefectStats } from "@/lib/defect-import";
 import { getScopedCrs, getScopedDefects } from "@/lib/scoped-data.functions";
 import { getWorkflowStatuses } from "@/lib/workflow-statuses.functions";
-import { updateCrWorkflowStatus } from "@/lib/crs-admin.functions";
+import { updateCrWorkflowStatus, updateCrTestingPercentage } from "@/lib/crs-admin.functions";
+import { useAppUser } from "@/lib/app-user";
 
 export const Route = createFileRoute("/crs")({
   head: () => ({ meta: [{ title: "CR Repository · Kpisavvy" }] }),
@@ -35,6 +36,8 @@ function CrLayout() {
 }
 
 function CrRepository() {
+  const { isAdmin, role } = useAppUser();
+  const canEditTestingPct = isAdmin || role === "ITPM" || role === "BA";
   const [q, setQ] = useState("");
   const [app, setApp] = useState<string>("__all__");
   const [size, setSize] = useState<string>("__all__");
@@ -69,6 +72,17 @@ function CrRepository() {
       toast.error(e instanceof Error ? e.message : "Failed to update status"),
   });
 
+  const updateTestingPct = useMutation({
+    mutationFn: async (v: { crNumber: string; testingPercentage: number | null }) => {
+      await updateCrTestingPercentage({ data: v });
+    },
+    onSuccess: () => {
+      toast.success("Testing % saved.");
+      qc.invalidateQueries({ queryKey: ["crs-list"] });
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : String(e)),
+  });
+
   const crs = useQuery({
     queryKey: ["crs-list"],
     queryFn: async () =>
@@ -81,6 +95,7 @@ function CrRepository() {
         cr_size: string | null;
         date_created: string | null;
         date_modified: string | null;
+        testing_percentage: number | null;
       }[],
   });
 
@@ -245,6 +260,7 @@ function CrRepository() {
                   </TableHead>
                   <TableHead className="text-right">Open Defects</TableHead>
                   <TableHead className="text-right">Max Defect Aging</TableHead>
+                  <TableHead className="w-28 text-right">Testing %</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -276,6 +292,28 @@ function CrRepository() {
                     <TableCell className="text-right tabular-nums">{ds?.openCount ?? 0}</TableCell>
                     <TableCell className="text-right tabular-nums">{ds?.maxAgingDays != null ? `${ds.maxAgingDays}d` : "—"}</TableCell>
                     <TableCell className="text-right">
+                      {canEditTestingPct ? (
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          defaultValue={c.testing_percentage ?? ""}
+                          className="w-20 ml-auto text-right"
+                          onBlur={(e) => {
+                            const raw = e.target.value.trim();
+                            const next = raw === "" ? null : Number(raw);
+                            if (next !== (c.testing_percentage ?? null)) {
+                              updateTestingPct.mutate({ crNumber: c.cr_number, testingPercentage: next });
+                            }
+                          }}
+                        />
+                      ) : (
+                        <span className="tabular-nums">
+                          {c.testing_percentage != null ? `${c.testing_percentage}%` : "—"}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -293,7 +331,7 @@ function CrRepository() {
                 })}
                 {sorted.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={13} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={14} className="text-center py-12 text-muted-foreground">
                       No CRs match your filters.
                     </TableCell>
                   </TableRow>
