@@ -11,6 +11,8 @@ import {
   Calculator,
   LogOut,
   UserPlus,
+  FileSpreadsheet,
+  ClipboardCheck,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -18,23 +20,42 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useAppUser } from "@/lib/app-user";
 
+// Testers only ever see Dashboard + Test Case Upload — the rest of these
+// (CR-management screens) aren't relevant to a shared test-case pool.
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/upload", label: "Data Import", icon: Upload },
-  { to: "/crs", label: "CR Repository", icon: Database },
-  { to: "/cr-sizes", label: "CR Size Management", icon: Ruler },
+  { to: "/upload", label: "Data Import", icon: Upload, hiddenForTester: true },
+  { to: "/crs", label: "CR Repository", icon: Database, hiddenForTester: true },
+  { to: "/cr-sizes", label: "CR Size Management", icon: Ruler, hiddenForTester: true },
   { to: "/cr-allocation", label: "CR Allocation", icon: UserPlus, requiresAllocationAccess: true },
-  { to: "/kpis", label: "KPI Configuration", icon: Settings2 },
-  { to: "/defect-statuses", label: "Defect Status Mapping", icon: Bug },
-  { to: "/worklist", label: "KPI Worklist", icon: ListChecks },
-  { to: "/tat-logic", label: "TAT Calculator Logic", icon: Calculator },
+  {
+    to: "/test-case-upload",
+    label: "Test Case Upload",
+    icon: FileSpreadsheet,
+    requiresTesterAccess: true,
+  },
+  {
+    to: "/test-case-approval",
+    label: "Test Case Approval",
+    icon: ClipboardCheck,
+    requiresApproverAccess: true,
+  },
+  { to: "/kpis", label: "KPI Configuration", icon: Settings2, hiddenForTester: true },
+  { to: "/defect-statuses", label: "Defect Status Mapping", icon: Bug, hiddenForTester: true },
+  { to: "/worklist", label: "KPI Worklist", icon: ListChecks, hiddenForTester: true },
+  { to: "/tat-logic", label: "TAT Calculator Logic", icon: Calculator, hiddenForTester: true },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const router = useRouter();
-  const { userName, isAdmin, role } = useAppUser();
-  const canSeeAllocation = isAdmin || role != null;
+  const { userName, isAdmin, role, isTestCaseApprover } = useAppUser();
+  const isTester = role === "Tester" && !isAdmin;
+  // CR Allocation is a BA/ITPM/PMO feature — separate from the Tester's
+  // Test Case Management module.
+  const canSeeAllocation = isAdmin || (role != null && role !== "Tester");
+  const canSeeTesterNav = isAdmin || role === "Tester";
+  const canSeeApproverNav = isAdmin || isTestCaseApprover;
   async function onLogout() {
     await supabase.auth.signOut();
     router.invalidate();
@@ -71,6 +92,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         <nav className="flex-1 px-3 py-4 space-y-1">
           {nav.map((item) => {
             if ("requiresAllocationAccess" in item && !canSeeAllocation) return null;
+            if ("requiresTesterAccess" in item && !canSeeTesterNav) return null;
+            if ("requiresApproverAccess" in item && !canSeeApproverNav) return null;
+            if ("hiddenForTester" in item && isTester) return null;
             const Icon = item.icon;
             const active =
               item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);

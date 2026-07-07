@@ -49,6 +49,7 @@ export interface DefectImportResult {
   totalRows: number;
   imported: number;
   skipped: number;
+  testCasesFlaggedForRetest: number;
   errors: string[];
 }
 
@@ -100,7 +101,56 @@ const importDefectRows = createServerFn({ method: "POST" })
       else imported += chunk.length;
     }
 
-    return { totalRows: rows.length, imported, skipped, errors };
+    // Reconcile: a test case marked "Defect Raised" whose referenced defect
+    // has since closed (per defect_status_mapping) gets scratched back to
+    // Pending and flagged — same "trust the fresh report over stale manual
+    // state" pattern used for crs.is_dropped on CR re-import. Only acts on
+    // defect ids this report actually resolved a status for; unrecognized
+    // ids are left alone.
+    let testCasesFlaggedForRetest = 0;
+    const { data: raisedTestCases, error: raisedErr } = await supabaseAdmin
+      .from("test_cases")
+      .select("id, defect_id")
+      .eq("execution_status", "Defect Raised");
+    if (raisedErr) throw new Error(raisedErr.message);
+
+    const defectIds = Array.from(
+      new Set((raisedTestCases ?? []).map((t) => t.defect_id).filter((d): d is string => !!d)),
+    );
+    if (defectIds.length > 0) {
+      const [{ data: mapping, error: mapErr }, { data: defectRows, error: defErr }] =
+        await Promise.all([
+          supabaseAdmin.from("defect_status_mapping").select("status, is_open"),
+          supabaseAdmin.from("defects").select("defect_no, new_status").in("defect_no", defectIds),
+        ]);
+      if (mapErr) throw new Error(mapErr.message);
+      if (defErr) throw new Error(defErr.message);
+
+      const openStatuses = new Set((mapping ?? []).filter((m) => m.is_open).map((m) => m.status));
+      const newStatusByDefectNo = new Map(
+        (defectRows ?? []).map((d) => [d.defect_no, d.new_status]),
+      );
+
+      const idsToReset = (raisedTestCases ?? [])
+        .filter((t) => {
+          if (!t.defect_id) return false;
+          const newStatus = newStatusByDefectNo.get(t.defect_id);
+          if (newStatus == null) return false;
+          return !openStatuses.has(newStatus);
+        })
+        .map((t) => t.id);
+
+      if (idsToReset.length > 0) {
+        const { error: resetErr } = await supabaseAdmin
+          .from("test_cases")
+          .update({ execution_status: "Pending", defect_id: null, needs_retest: true } as never)
+          .in("id", idsToReset);
+        if (resetErr) throw new Error(resetErr.message);
+        testCasesFlaggedForRetest = idsToReset.length;
+      }
+    }
+
+    return { totalRows: rows.length, imported, skipped, testCasesFlaggedForRetest, errors };
   });
 
 export async function importDefectCsv(file: File): Promise<DefectImportResult> {

@@ -34,7 +34,10 @@ interface AllocationCr {
 function CrAllocationPage() {
   const navigate = useNavigate();
   const { isAdmin, role, isLoading: userLoading } = useAppUser();
-  const canAccess = isAdmin || role != null;
+  // CR Allocation is a BA/ITPM/PMO feature — Testers belong to the separate
+  // Test Case Management module and have no allocation role here.
+  const allocationRole = role === "Tester" ? null : role;
+  const canAccess = isAdmin || allocationRole != null;
 
   useEffect(() => {
     if (!userLoading && !canAccess) navigate({ to: "/" });
@@ -42,7 +45,9 @@ function CrAllocationPage() {
 
   if (userLoading || !canAccess) return null;
 
-  return <CrAllocationView isFullView={isAdmin || role === "PMO"} role={role} />;
+  return (
+    <CrAllocationView isFullView={isAdmin || allocationRole === "PMO"} role={allocationRole} />
+  );
 }
 
 function CrAllocationView({ isFullView, role }: { isFullView: boolean; role: "BA" | "ITPM" | "PMO" | null }) {

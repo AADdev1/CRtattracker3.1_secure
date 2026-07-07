@@ -57,26 +57,6 @@ export const bulkDropCrs = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-// ITPM/BA/Admin only — not a KPI-engine input, so no recalculation needed.
-export const updateCrTestingPercentage = createServerFn({ method: "POST" })
-  .inputValidator((data: { crNumber: string; testingPercentage: number | null }) => data)
-  .handler(async ({ data }) => {
-    const { isAdmin, role } = await requireSessionUser();
-    if (!isAdmin && role !== "ITPM" && role !== "BA") {
-      throw new Error("Forbidden: only ITPM, BA, or Admin can update testing percentage");
-    }
-    if (data.testingPercentage != null && (data.testingPercentage < 0 || data.testingPercentage > 100)) {
-      throw new Error("Testing percentage must be between 0 and 100");
-    }
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin
-      .from("crs")
-      .update({ testing_percentage: data.testingPercentage } as never)
-      .eq("cr_number", data.crNumber);
-    if (error) throw new Error(error.message);
-    return { ok: true as const };
-  });
-
 export const updateCrWorkflowStatus = createServerFn({ method: "POST" })
   .inputValidator((data: { crNumber: string; dbColumn: string; label: string }) => data)
   .handler(async ({ data }) => {

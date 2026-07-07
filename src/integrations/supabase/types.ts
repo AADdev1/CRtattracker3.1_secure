@@ -567,6 +567,80 @@ export type Database = {
         }
         Relationships: []
       }
+      test_cases: {
+        Row: {
+          approval_date: string | null
+          approved_by: string | null
+          approver_comments: string | null
+          created_at: string
+          cr_number: string
+          defect_id: string | null
+          execution_status: Database["public"]["Enums"]["test_case_execution_status"]
+          expected_result: string
+          id: string
+          needs_retest: boolean
+          status: Database["public"]["Enums"]["test_case_status"]
+          test_case_name: string
+          test_case_number: string
+          test_condition: string
+          test_priority: string | null
+          tester_comments: string | null
+          uploaded_by: string
+          uploaded_date: string
+          updated_at: string
+        }
+        Insert: {
+          approval_date?: string | null
+          approved_by?: string | null
+          approver_comments?: string | null
+          created_at?: string
+          cr_number: string
+          defect_id?: string | null
+          execution_status?: Database["public"]["Enums"]["test_case_execution_status"]
+          expected_result: string
+          id?: string
+          needs_retest?: boolean
+          status?: Database["public"]["Enums"]["test_case_status"]
+          test_case_name: string
+          test_case_number: string
+          test_condition: string
+          test_priority?: string | null
+          tester_comments?: string | null
+          uploaded_by: string
+          uploaded_date?: string
+          updated_at?: string
+        }
+        Update: {
+          approval_date?: string | null
+          approved_by?: string | null
+          approver_comments?: string | null
+          created_at?: string
+          cr_number?: string
+          defect_id?: string | null
+          execution_status?: Database["public"]["Enums"]["test_case_execution_status"]
+          expected_result?: string
+          id?: string
+          needs_retest?: boolean
+          status?: Database["public"]["Enums"]["test_case_status"]
+          test_case_name?: string
+          test_case_number?: string
+          test_condition?: string
+          test_priority?: string | null
+          tester_comments?: string | null
+          uploaded_by?: string
+          uploaded_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_cases_cr_number_fkey"
+            columns: ["cr_number"]
+            isOneToOne: false
+            referencedRelation: "crs"
+            referencedColumns: ["cr_number"]
+          },
+        ]
+      }
       user_management: {
         Row: {
           created_at: string
@@ -574,6 +648,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_admin: boolean
+          is_test_case_approver: boolean
           password_hash: string | null
           role: Database["public"]["Enums"]["staff_role"] | null
           updated_at: string
@@ -585,6 +660,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_admin?: boolean
+          is_test_case_approver?: boolean
           password_hash?: string | null
           role?: Database["public"]["Enums"]["staff_role"] | null
           updated_at?: string
@@ -596,6 +672,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_admin?: boolean
+          is_test_case_approver?: boolean
           password_hash?: string | null
           role?: Database["public"]["Enums"]["staff_role"] | null
           updated_at?: string
@@ -648,7 +725,9 @@ export type Database = {
       cr_size: "Small" | "Medium" | "Large"
       kpi_role: "ITPM" | "BA"
       kpi_status: "pending" | "not_started" | "green" | "amber" | "red"
-      staff_role: "BA" | "ITPM" | "PMO"
+      staff_role: "BA" | "ITPM" | "PMO" | "Tester"
+      test_case_status: "Pending" | "Submitted" | "Sent Back for Revision" | "Approved"
+      test_case_execution_status: "Pending" | "Tested" | "Defect Raised"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -780,7 +859,9 @@ export const Constants = {
       cr_size: ["Small", "Medium", "Large"],
       kpi_role: ["ITPM", "BA"],
       kpi_status: ["pending", "not_started", "green", "amber", "red"],
-      staff_role: ["BA", "ITPM", "PMO"],
+      staff_role: ["BA", "ITPM", "PMO", "Tester"],
+      test_case_status: ["Pending", "Submitted", "Sent Back for Revision", "Approved"],
+      test_case_execution_status: ["Pending", "Tested", "Defect Raised"],
     },
   },
 } as const

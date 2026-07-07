@@ -1,6 +1,7 @@
-// KPI Configuration screen's reads/writes — open to any logged-in user,
-// same as before. RLS is locked down, so these go through the service-role
-// client now instead of the anon client.
+// KPI Configuration screen. Reads are open to any logged-in user (KPI
+// definitions are useful context for BA/ITPM/PMO too); writes (save/delete)
+// are Admin-only. RLS is locked down, so these go through the service-role
+// client instead of the anon client.
 import { createServerFn } from "@tanstack/react-start";
 import { requireSessionUser } from "@/lib/gate.functions";
 
@@ -39,7 +40,8 @@ export const listKpiExcludedStatuses = createServerFn({ method: "GET" }).handler
 export const saveKpi = createServerFn({ method: "POST" })
   .inputValidator((data: KpiFormInput) => data)
   .handler(async ({ data: form }) => {
-    await requireSessionUser();
+    const { isAdmin } = await requireSessionUser();
+    if (!isAdmin) throw new Error("Forbidden: only Admin can configure KPIs");
     if (!form.name || !form.start_status_code || !form.end_status_code) {
       throw new Error("Name, Start Status and End Status are required");
     }
@@ -73,7 +75,8 @@ export const saveKpi = createServerFn({ method: "POST" })
 export const deleteKpi = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string }) => data)
   .handler(async ({ data }) => {
-    await requireSessionUser();
+    const { isAdmin } = await requireSessionUser();
+    if (!isAdmin) throw new Error("Forbidden: only Admin can configure KPIs");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("kpis").delete().eq("id", data.id);
     if (error) throw new Error(error.message);

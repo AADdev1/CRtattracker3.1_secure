@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { recalculateAllKpis } from "@/lib/kpi-engine";
 import { getWorkflowStatuses } from "@/lib/workflow-statuses.functions";
 import { listKpis, listKpiExcludedStatuses, saveKpi, deleteKpi } from "@/lib/kpi-config.functions";
+import { useAppUser } from "@/lib/app-user";
 
 export const Route = createFileRoute("/kpis")({
   head: () => ({ meta: [{ title: "KPI Configuration · Kpisavvy" }] }),
@@ -52,6 +53,7 @@ const EMPTY: KpiForm = {
 };
 
 function KpiConfigPage() {
+  const { isAdmin } = useAppUser();
   const qc = useQueryClient();
   const [editing, setEditing] = useState<KpiForm | null>(null);
 
@@ -106,24 +108,30 @@ function KpiConfigPage() {
     <AppShell>
       <PageHeader
         title="KPI Configuration"
-        description="Define KPIs. Each one is a Start → End workflow pair with TAT by CR size."
+        description={
+          isAdmin
+            ? "Define KPIs. Each one is a Start → End workflow pair with TAT by CR size."
+            : "Read-only — how KPIs are defined. Only Admin can add or change them."
+        }
         actions={
-          <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
-            <DialogTrigger asChild>
-              <Button onClick={() => setEditing(EMPTY)}>
-                <Plus /> New KPI
-              </Button>
-            </DialogTrigger>
-            {editing && (
-              <KpiDialog
-                form={editing}
-                statuses={statuses.data ?? []}
-                onChange={setEditing}
-                onSave={() => save.mutate(editing)}
-                saving={save.isPending}
-              />
-            )}
-          </Dialog>
+          isAdmin ? (
+            <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
+              <DialogTrigger asChild>
+                <Button onClick={() => setEditing(EMPTY)}>
+                  <Plus /> New KPI
+                </Button>
+              </DialogTrigger>
+              {editing && (
+                <KpiDialog
+                  form={editing}
+                  statuses={statuses.data ?? []}
+                  onChange={setEditing}
+                  onSave={() => save.mutate(editing)}
+                  saving={save.isPending}
+                />
+              )}
+            </Dialog>
+          ) : undefined
         }
       />
       <PageBody>
@@ -140,7 +148,7 @@ function KpiConfigPage() {
                   <TableHead className="text-right">S / M / L</TableHead>
                   <TableHead className="text-right">Warn %</TableHead>
                   <TableHead>Active</TableHead>
-                  <TableHead className="w-28" />
+                  {isAdmin && <TableHead className="w-28" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -162,37 +170,44 @@ function KpiConfigPage() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{k.warning_pct}%</TableCell>
                     <TableCell>{k.is_active ? "Yes" : "No"}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1 justify-end">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() =>
-                            setEditing({
-                              ...(k as unknown as KpiForm),
-                              excluded_status_codes: exclByKpi.get(k.id) ?? [],
-                            })
-                          }
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => {
-                            if (confirm(`Delete KPI "${k.name}"?`)) del.mutate(k.id);
-                          }}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                    {isAdmin && (
+                      <TableCell>
+                        <div className="flex gap-1 justify-end">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() =>
+                              setEditing({
+                                ...(k as unknown as KpiForm),
+                                excluded_status_codes: exclByKpi.get(k.id) ?? [],
+                              })
+                            }
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => {
+                              if (confirm(`Delete KPI "${k.name}"?`)) del.mutate(k.id);
+                            }}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
                 {kpis.data?.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
-                      No KPIs configured yet. Click "New KPI".
+                    <TableCell
+                      colSpan={isAdmin ? 9 : 8}
+                      className="text-center py-12 text-muted-foreground"
+                    >
+                      {isAdmin
+                        ? 'No KPIs configured yet. Click "New KPI".'
+                        : "No KPIs configured yet."}
                     </TableCell>
                   </TableRow>
                 )}

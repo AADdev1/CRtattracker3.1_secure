@@ -15,6 +15,7 @@ export function useAppUser() {
     userName: query.data?.userName ?? null,
     isAdmin: query.data?.isAdmin ?? false,
     role: (query.data?.role ?? null) as StaffRole | null,
+    isTestCaseApprover: query.data?.isTestCaseApprover ?? false,
     isLoading: query.isLoading,
   };
 }

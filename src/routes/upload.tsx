@@ -142,7 +142,12 @@ function DefectImport() {
     mutationFn: async (f: File) => importDefectCsv(f),
     onSuccess: (r) => {
       setResult(r);
-      toast.success(`Imported ${r.imported} defect(s) · Skipped ${r.skipped}.`);
+      toast.success(
+        `Imported ${r.imported} defect(s) · Skipped ${r.skipped}.` +
+          (r.testCasesFlaggedForRetest > 0
+            ? ` ${r.testCasesFlaggedForRetest} test case(s) flagged for retest (defect resolved).`
+            : ""),
+      );
       qc.invalidateQueries();
     },
     onError: (e: unknown) =>
@@ -199,10 +204,14 @@ function DefectImport() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="grid grid-cols-4 gap-4 text-center">
               <Stat label="Total Records" value={result.totalRows} />
               <Stat label="Imported" value={result.imported} />
               <Stat label="Skipped (CR Not Found)" value={result.skipped} />
+              <Stat
+                label="Test Cases Flagged for Retest"
+                value={result.testCasesFlaggedForRetest}
+              />
             </div>
             {result.errors.length > 0 && (
               <div className="mt-4 text-xs text-destructive max-h-40 overflow-y-auto">

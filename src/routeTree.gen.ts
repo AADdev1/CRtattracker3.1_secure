@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorklistRouteImport } from './routes/worklist'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as UploadRouteImport } from './routes/upload'
+import { Route as TestCaseUploadRouteImport } from './routes/test-case-upload'
+import { Route as TestCaseApprovalRouteImport } from './routes/test-case-approval'
 import { Route as TatLogicRouteImport } from './routes/tat-logic'
 import { Route as KpisRouteImport } from './routes/kpis'
 import { Route as DefectStatusesRouteImport } from './routes/defect-statuses'
@@ -20,6 +22,7 @@ import { Route as CrSizesRouteImport } from './routes/cr-sizes'
 import { Route as CrAllocationRouteImport } from './routes/cr-allocation'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TestCaseReviewCrNumberRouteImport } from './routes/test-case-review.$crNumber'
 import { Route as CrsCrNumberRouteImport } from './routes/crs.$crNumber'
 
 const WorklistRoute = WorklistRouteImport.update({
@@ -35,6 +38,16 @@ const UsersRoute = UsersRouteImport.update({
 const UploadRoute = UploadRouteImport.update({
   id: '/upload',
   path: '/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TestCaseUploadRoute = TestCaseUploadRouteImport.update({
+  id: '/test-case-upload',
+  path: '/test-case-upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TestCaseApprovalRoute = TestCaseApprovalRouteImport.update({
+  id: '/test-case-approval',
+  path: '/test-case-approval',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TatLogicRoute = TatLogicRouteImport.update({
@@ -77,6 +90,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TestCaseReviewCrNumberRoute = TestCaseReviewCrNumberRouteImport.update({
+  id: '/test-case-review/$crNumber',
+  path: '/test-case-review/$crNumber',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CrsCrNumberRoute = CrsCrNumberRouteImport.update({
   id: '/$crNumber',
   path: '/$crNumber',
@@ -92,10 +110,13 @@ export interface FileRoutesByFullPath {
   '/defect-statuses': typeof DefectStatusesRoute
   '/kpis': typeof KpisRoute
   '/tat-logic': typeof TatLogicRoute
+  '/test-case-approval': typeof TestCaseApprovalRoute
+  '/test-case-upload': typeof TestCaseUploadRoute
   '/upload': typeof UploadRoute
   '/users': typeof UsersRoute
   '/worklist': typeof WorklistRoute
   '/crs/$crNumber': typeof CrsCrNumberRoute
+  '/test-case-review/$crNumber': typeof TestCaseReviewCrNumberRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -106,10 +127,13 @@ export interface FileRoutesByTo {
   '/defect-statuses': typeof DefectStatusesRoute
   '/kpis': typeof KpisRoute
   '/tat-logic': typeof TatLogicRoute
+  '/test-case-approval': typeof TestCaseApprovalRoute
+  '/test-case-upload': typeof TestCaseUploadRoute
   '/upload': typeof UploadRoute
   '/users': typeof UsersRoute
   '/worklist': typeof WorklistRoute
   '/crs/$crNumber': typeof CrsCrNumberRoute
+  '/test-case-review/$crNumber': typeof TestCaseReviewCrNumberRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -121,10 +145,13 @@ export interface FileRoutesById {
   '/defect-statuses': typeof DefectStatusesRoute
   '/kpis': typeof KpisRoute
   '/tat-logic': typeof TatLogicRoute
+  '/test-case-approval': typeof TestCaseApprovalRoute
+  '/test-case-upload': typeof TestCaseUploadRoute
   '/upload': typeof UploadRoute
   '/users': typeof UsersRoute
   '/worklist': typeof WorklistRoute
   '/crs/$crNumber': typeof CrsCrNumberRoute
+  '/test-case-review/$crNumber': typeof TestCaseReviewCrNumberRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -137,10 +164,13 @@ export interface FileRouteTypes {
     | '/defect-statuses'
     | '/kpis'
     | '/tat-logic'
+    | '/test-case-approval'
+    | '/test-case-upload'
     | '/upload'
     | '/users'
     | '/worklist'
     | '/crs/$crNumber'
+    | '/test-case-review/$crNumber'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -151,10 +181,13 @@ export interface FileRouteTypes {
     | '/defect-statuses'
     | '/kpis'
     | '/tat-logic'
+    | '/test-case-approval'
+    | '/test-case-upload'
     | '/upload'
     | '/users'
     | '/worklist'
     | '/crs/$crNumber'
+    | '/test-case-review/$crNumber'
   id:
     | '__root__'
     | '/'
@@ -165,10 +198,13 @@ export interface FileRouteTypes {
     | '/defect-statuses'
     | '/kpis'
     | '/tat-logic'
+    | '/test-case-approval'
+    | '/test-case-upload'
     | '/upload'
     | '/users'
     | '/worklist'
     | '/crs/$crNumber'
+    | '/test-case-review/$crNumber'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -180,9 +216,12 @@ export interface RootRouteChildren {
   DefectStatusesRoute: typeof DefectStatusesRoute
   KpisRoute: typeof KpisRoute
   TatLogicRoute: typeof TatLogicRoute
+  TestCaseApprovalRoute: typeof TestCaseApprovalRoute
+  TestCaseUploadRoute: typeof TestCaseUploadRoute
   UploadRoute: typeof UploadRoute
   UsersRoute: typeof UsersRoute
   WorklistRoute: typeof WorklistRoute
+  TestCaseReviewCrNumberRoute: typeof TestCaseReviewCrNumberRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -206,6 +245,20 @@ declare module '@tanstack/react-router' {
       path: '/upload'
       fullPath: '/upload'
       preLoaderRoute: typeof UploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/test-case-upload': {
+      id: '/test-case-upload'
+      path: '/test-case-upload'
+      fullPath: '/test-case-upload'
+      preLoaderRoute: typeof TestCaseUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/test-case-approval': {
+      id: '/test-case-approval'
+      path: '/test-case-approval'
+      fullPath: '/test-case-approval'
+      preLoaderRoute: typeof TestCaseApprovalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tat-logic': {
@@ -264,6 +317,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/test-case-review/$crNumber': {
+      id: '/test-case-review/$crNumber'
+      path: '/test-case-review/$crNumber'
+      fullPath: '/test-case-review/$crNumber'
+      preLoaderRoute: typeof TestCaseReviewCrNumberRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/crs/$crNumber': {
       id: '/crs/$crNumber'
       path: '/$crNumber'
@@ -293,9 +353,12 @@ const rootRouteChildren: RootRouteChildren = {
   DefectStatusesRoute: DefectStatusesRoute,
   KpisRoute: KpisRoute,
   TatLogicRoute: TatLogicRoute,
+  TestCaseApprovalRoute: TestCaseApprovalRoute,
+  TestCaseUploadRoute: TestCaseUploadRoute,
   UploadRoute: UploadRoute,
   UsersRoute: UsersRoute,
   WorklistRoute: WorklistRoute,
+  TestCaseReviewCrNumberRoute: TestCaseReviewCrNumberRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
