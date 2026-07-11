@@ -1,39 +1,23 @@
-// Resolves the signed-in Supabase user + their profiles.role, and redirects
-// to /auth when there is no session. This is a client-side gate: Supabase
-// sessions live in localStorage, so SSR can't check them during beforeLoad.
-// The real security boundary is Postgres RLS, which blocks all data access
-// for unauthenticated requests regardless of what briefly renders.
+// Client-side "is there a Supabase Auth session" gate — redirects to /auth
+// when there is none. Sessions live in localStorage, so SSR can't check
+// this during beforeLoad. The real security boundary is every server
+// function's requireSessionUser() call (src/lib/gate.functions.ts), which
+// re-verifies the JWT and the caller's public.user_management row on every
+// request — this provider only avoids flashing protected UI at a
+// signed-out visitor. Role/admin/approver checks live in useAppUser()
+// (src/lib/app-user.ts), not here — this file no longer knows about roles
+// at all (see the migration that dropped public.profiles/app_role).
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
 
-export type AppRole = Database["public"]["Enums"]["app_role"];
-
-interface CurrentUser {
-  userId: string;
-  email: string;
-  role: AppRole;
-}
-
-const CurrentUserContext = createContext<{
-  user: CurrentUser | null;
-  isLoading: boolean;
-} | null>(null);
-
-async function loadCurrentUser(): Promise<CurrentUser | null> {
+async function hasSession(): Promise<boolean> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("email, role")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) return null;
-  return { userId: user.id, email: data.email, role: data.role };
+  return !!user;
 }
+
+const SessionContext = createContext<{ hasSession: boolean; isLoading: boolean } | null>(null);
 
 export function CurrentUserProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
@@ -41,13 +25,14 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
 
   const query = useQuery({
-    queryKey: ["current-user"],
-    queryFn: loadCurrentUser,
+    queryKey: ["current-session"],
+    queryFn: hasSession,
   });
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      qc.invalidateQueries({ queryKey: ["current-user"] });
+      qc.invalidateQueries({ queryKey: ["current-session"] });
+      qc.invalidateQueries({ queryKey: ["app-user"] });
     });
     return () => sub.subscription.unsubscribe();
   }, [qc]);
@@ -64,14 +49,14 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <CurrentUserContext.Provider value={{ user: query.data ?? null, isLoading: query.isLoading }}>
+    <SessionContext.Provider value={{ hasSession: query.data ?? false, isLoading: query.isLoading }}>
       {children}
-    </CurrentUserContext.Provider>
+    </SessionContext.Provider>
   );
 }
 
-export function useCurrentUser() {
-  const ctx = useContext(CurrentUserContext);
-  if (!ctx) throw new Error("useCurrentUser must be used within CurrentUserProvider");
+export function useSessionGate() {
+  const ctx = useContext(SessionContext);
+  if (!ctx) throw new Error("useSessionGate must be used within CurrentUserProvider");
   return ctx;
 }

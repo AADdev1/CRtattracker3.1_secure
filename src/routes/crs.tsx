@@ -22,6 +22,7 @@ import { getScopedCrs, getScopedDefects } from "@/lib/scoped-data.functions";
 import { getWorkflowStatuses } from "@/lib/workflow-statuses.functions";
 import { updateCrWorkflowStatus } from "@/lib/crs-admin.functions";
 import { getTestCaseCompletionByCr } from "@/lib/test-cases.functions";
+import { useAppUser } from "@/lib/app-user";
 
 export const Route = createFileRoute("/crs")({
   head: () => ({ meta: [{ title: "CR Repository · Kpisavvy" }] }),
@@ -36,6 +37,8 @@ function CrLayout() {
 }
 
 function CrRepository() {
+  const { role } = useAppUser();
+  const canEditStatus = role === "PMO" || role === "BA" || role === "ITPM";
   const [q, setQ] = useState("");
   const [app, setApp] = useState<string>("__all__");
   const [size, setSize] = useState<string>("__all__");
@@ -294,17 +297,19 @@ function CrRepository() {
                       {testingPct(c.cr_number)}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditing({ crNumber: c.cr_number, current: c.workflow_status });
-                          const match = (wfStatuses.data ?? []).find((w) => w.label === c.workflow_status);
-                          setNewStatusCode(match?.code ?? "");
-                        }}
-                      >
-                        <Pencil className="size-3.5 mr-1" /> Update Status
-                      </Button>
+                      {canEditStatus && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditing({ crNumber: c.cr_number, current: c.workflow_status });
+                            const match = (wfStatuses.data ?? []).find((w) => w.label === c.workflow_status);
+                            setNewStatusCode(match?.code ?? "");
+                          }}
+                        >
+                          <Pencil className="size-3.5 mr-1" /> Update Status
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                   );

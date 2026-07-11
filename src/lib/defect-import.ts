@@ -8,6 +8,7 @@
 import Papa from "papaparse";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSessionUser } from "@/lib/gate.functions";
+import { assertFileSizeOk, assertRowCountOk } from "@/lib/upload-limits";
 
 const FIELD_MAP: Record<string, string> = {
   "Defect No": "defect_no",
@@ -56,7 +57,11 @@ export interface DefectImportResult {
 const importDefectRows = createServerFn({ method: "POST" })
   .inputValidator((data: { rows: Record<string, string>[] }) => data)
   .handler(async ({ data: { rows } }): Promise<DefectImportResult> => {
-    await requireSessionUser();
+    const { isAdmin, role } = await requireSessionUser();
+    if (!isAdmin && role !== "PMO" && role !== "BA" && role !== "ITPM") {
+      throw new Error("Forbidden: only Admin, PMO, BA, or ITPM can import defect data");
+    }
+    assertRowCountOk(rows.length);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Load all CR numbers for validation.
@@ -154,6 +159,7 @@ const importDefectRows = createServerFn({ method: "POST" })
   });
 
 export async function importDefectCsv(file: File): Promise<DefectImportResult> {
+  assertFileSizeOk(file);
   const parsed = await new Promise<Papa.ParseResult<Record<string, string>>>(
     (resolve, reject) => {
       Papa.parse<Record<string, string>>(file, {

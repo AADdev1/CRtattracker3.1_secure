@@ -13,6 +13,7 @@ import {
   UserPlus,
   FileSpreadsheet,
   ClipboardCheck,
+  ShieldCheck,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -26,7 +27,10 @@ const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/upload", label: "Data Import", icon: Upload, hiddenForTester: true },
   { to: "/crs", label: "CR Repository", icon: Database, hiddenForTester: true },
-  { to: "/cr-sizes", label: "CR Size Management", icon: Ruler, hiddenForTester: true },
+  // CR Size Management is a PMO/BA/ITPM function-of-record, not an Admin
+  // one — Admin (without also holding one of those job roles) doesn't get
+  // this link, matching the server-side check in crs-admin.functions.ts.
+  { to: "/cr-sizes", label: "CR Size Management", icon: Ruler, requiresCrEditAccess: true },
   { to: "/cr-allocation", label: "CR Allocation", icon: UserPlus, requiresAllocationAccess: true },
   {
     to: "/test-case-upload",
@@ -44,6 +48,16 @@ const nav = [
   { to: "/defect-statuses", label: "Defect Status Mapping", icon: Bug, hiddenForTester: true },
   { to: "/worklist", label: "KPI Worklist", icon: ListChecks, hiddenForTester: true },
   { to: "/tat-logic", label: "TAT Calculator Logic", icon: Calculator, hiddenForTester: true },
+  // Admin/ITPM only — the real gate is server-side in
+  // security-report.functions.ts; this just keeps the link off the nav
+  // for everyone else. Opens in a new tab so it doesn't replace the app.
+  {
+    to: "/security-report",
+    label: "Security Report",
+    icon: ShieldCheck,
+    requiresSecurityReportAccess: true,
+    openInNewTab: true,
+  },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -56,6 +70,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const canSeeAllocation = isAdmin || (role != null && role !== "Tester");
   const canSeeTesterNav = isAdmin || role === "Tester";
   const canSeeApproverNav = isAdmin || isTestCaseApprover;
+  const canSeeCrSizes = role === "PMO" || role === "BA" || role === "ITPM";
+  const canSeeSecurityReport = isAdmin || role === "ITPM";
   async function onLogout() {
     await supabase.auth.signOut();
     router.invalidate();
@@ -94,6 +110,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             if ("requiresAllocationAccess" in item && !canSeeAllocation) return null;
             if ("requiresTesterAccess" in item && !canSeeTesterNav) return null;
             if ("requiresApproverAccess" in item && !canSeeApproverNav) return null;
+            if ("requiresCrEditAccess" in item && !canSeeCrSizes) return null;
+            if ("requiresSecurityReportAccess" in item && !canSeeSecurityReport) return null;
             if ("hiddenForTester" in item && isTester) return null;
             const Icon = item.icon;
             const active =
@@ -102,6 +120,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Link
                 key={item.to}
                 to={item.to}
+                {...("openInNewTab" in item ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
                   active

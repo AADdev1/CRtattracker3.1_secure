@@ -10,6 +10,7 @@
 import Papa from "papaparse";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSessionUser } from "@/lib/gate.functions";
+import { assertFileSizeOk, assertRowCountOk } from "@/lib/upload-limits";
 
 // Map from CSV header → DB column name.
 // Status columns are populated dynamically from workflow_statuses table.
@@ -97,7 +98,11 @@ export interface CsvImportResult {
 const importCrRows = createServerFn({ method: "POST" })
   .inputValidator((data: { rows: Record<string, string>[] }) => data)
   .handler(async ({ data: { rows } }): Promise<CsvImportResult> => {
-    await requireSessionUser();
+    const { isAdmin, role } = await requireSessionUser();
+    if (!isAdmin && role !== "PMO" && role !== "BA" && role !== "ITPM") {
+      throw new Error("Forbidden: only Admin, PMO, BA, or ITPM can import CR data");
+    }
+    assertRowCountOk(rows.length);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: statuses, error: sErr } = await supabaseAdmin
@@ -197,6 +202,7 @@ const importCrRows = createServerFn({ method: "POST" })
   });
 
 export async function importCrCsv(file: File): Promise<CsvImportResult> {
+  assertFileSizeOk(file);
   const parsed = await new Promise<Papa.ParseResult<Record<string, string>>>(
     (resolve, reject) => {
       Papa.parse<Record<string, string>>(file, {

@@ -1,4 +1,5 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Activity, Loader2 } from "lucide-react";
@@ -7,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { signIn } from "@/lib/auth.functions";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -15,6 +17,7 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const router = useRouter();
   const qc = useQueryClient();
+  const signInFn = useServerFn(signIn);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -23,7 +26,14 @@ function AuthPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      // Sign-in is server-mediated (src/lib/auth.functions.ts) rather than
+      // calling supabase.auth.signInWithPassword from the browser directly
+      // — that lets the app enforce its own per-email lockout before
+      // Supabase is ever contacted. The server hands back session tokens,
+      // which setSession hydrates into the client SDK exactly as if
+      // signInWithPassword had run locally.
+      const { access_token, refresh_token } = await signInFn({ data: { email, password } });
+      const { error } = await supabase.auth.setSession({ access_token, refresh_token });
       if (error) {
         toast.error(error.message);
       } else {
@@ -31,7 +41,7 @@ function AuthPage() {
         // Wait for it to refetch with the new session before navigating —
         // otherwise the stale cached "no session" briefly bounces us back
         // to /auth right after landing on "/".
-        await qc.invalidateQueries({ queryKey: ["current-user"] });
+        await qc.invalidateQueries({ queryKey: ["current-session"] });
         toast.success("Signed in");
         await router.navigate({ to: "/" });
         router.invalidate();

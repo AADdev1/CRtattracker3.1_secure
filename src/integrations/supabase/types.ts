@@ -543,26 +543,26 @@ export type Database = {
         }
         Relationships: []
       }
-      profiles: {
+      login_attempts: {
         Row: {
-          created_at: string
           email: string
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
+          failed_count: number
+          first_failed_at: string | null
+          locked_until: string | null
           updated_at: string
         }
         Insert: {
-          created_at?: string
           email: string
-          id: string
-          role?: Database["public"]["Enums"]["app_role"]
+          failed_count?: number
+          first_failed_at?: string | null
+          locked_until?: string | null
           updated_at?: string
         }
         Update: {
-          created_at?: string
           email?: string
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          failed_count?: number
+          first_failed_at?: string | null
+          locked_until?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -643,6 +643,7 @@ export type Database = {
       }
       user_management: {
         Row: {
+          auth_user_id: string | null
           created_at: string
           email: string
           id: string
@@ -651,10 +652,12 @@ export type Database = {
           is_test_case_approver: boolean
           password_hash: string | null
           role: Database["public"]["Enums"]["staff_role"] | null
+          spoc_applications: string[]
           updated_at: string
           user_name: string
         }
         Insert: {
+          auth_user_id?: string | null
           created_at?: string
           email: string
           id?: string
@@ -663,10 +666,12 @@ export type Database = {
           is_test_case_approver?: boolean
           password_hash?: string | null
           role?: Database["public"]["Enums"]["staff_role"] | null
+          spoc_applications?: string[]
           updated_at?: string
           user_name: string
         }
         Update: {
+          auth_user_id?: string | null
           created_at?: string
           email?: string
           id?: string
@@ -675,6 +680,7 @@ export type Database = {
           is_test_case_approver?: boolean
           password_hash?: string | null
           role?: Database["public"]["Enums"]["staff_role"] | null
+          spoc_applications?: string[]
           updated_at?: string
           user_name?: string
         }
@@ -721,7 +727,6 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      app_role: "ITPM" | "BA" | "Admin"
       cr_size: "Small" | "Medium" | "Large"
       kpi_role: "ITPM" | "BA"
       kpi_status: "pending" | "not_started" | "green" | "amber" | "red"
@@ -855,7 +860,6 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["ITPM", "BA", "Admin"],
       cr_size: ["Small", "Medium", "Large"],
       kpi_role: ["ITPM", "BA"],
       kpi_status: ["pending", "not_started", "green", "amber", "red"],

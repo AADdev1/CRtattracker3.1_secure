@@ -90,7 +90,9 @@ function TestCaseReviewPage() {
   const header = data.data?.header;
   const status = rows[0]?.status ?? "Pending";
   const canAct = (isAdmin || isTestCaseApprover) && status === "Submitted";
-  const canEditExecution = (isAdmin || role === "Tester") && status === "Approved";
+  // Deliberately no isAdmin bypass — only the Tester role can update
+  // execution status, matching the server-side check.
+  const canEditExecution = role === "Tester" && status === "Approved";
   const testedCount = rows.filter((r) => r.execution_status === "Tested").length;
   const testedPct =
     rows.length === 0

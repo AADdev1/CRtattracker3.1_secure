@@ -16,6 +16,7 @@
 import * as XLSX from "xlsx";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSessionUser } from "@/lib/gate.functions";
+import { assertFileSizeOk, assertRowCountOk } from "@/lib/upload-limits";
 import type { Database } from "@/integrations/supabase/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -121,6 +122,7 @@ export const uploadTestCases = createServerFn({ method: "POST" })
     if (!isAdmin && role !== "Tester")
       throw new Error("Forbidden: only Testers can upload test cases");
     if (data.rows.length === 0) throw new Error("No test case rows to upload");
+    assertRowCountOk(data.rows.length);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -204,9 +206,10 @@ export const submitTestCases = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-// Tester (or Admin) only, and only once the CR's test cases are Approved —
-// per-row execution outcome, separate from the approval workflow status
-// above. Defect Raised requires a defect id; any other status clears it.
+// Tester only — deliberately no Admin bypass, unlike every other function
+// in this file. Only once the CR's test cases are Approved — per-row
+// execution outcome, separate from the approval workflow status above.
+// Defect Raised requires a defect id; any other status clears it.
 export const updateExecutionStatus = createServerFn({ method: "POST" })
   .inputValidator(
     (data: {
@@ -216,8 +219,8 @@ export const updateExecutionStatus = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data }) => {
-    const { isAdmin, role } = await requireSessionUser();
-    if (!isAdmin && role !== "Tester") {
+    const { role } = await requireSessionUser();
+    if (role !== "Tester") {
       throw new Error("Forbidden: only Testers can update execution status");
     }
     if (data.executionStatus === "Defect Raised" && !data.defectId?.trim()) {
@@ -251,11 +254,12 @@ export const updateExecutionStatus = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-// Approver (BA/ITPM flagged is_test_case_approver) or Admin only. Reuses
-// the existing ba/itpm relation match — same mechanism as scoped-data.functions.ts
-// — rather than a new per-CR approver table.
+// Approver (BA/ITPM, or application SPOC, flagged is_test_case_approver)
+// or Admin only. Reuses the existing ba/itpm relation match — same
+// mechanism as scoped-data.functions.ts — plus spoc_applications, rather
+// than a new per-CR approver table.
 export const listSubmittedForApproval = createServerFn({ method: "GET" }).handler(async () => {
-  const { userName, isAdmin, isTestCaseApprover } = await requireSessionUser();
+  const { userName, isAdmin, isTestCaseApprover, spocApplications } = await requireSessionUser();
   if (!isAdmin && !isTestCaseApprover) throw new Error("Forbidden");
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -287,7 +291,13 @@ export const listSubmittedForApproval = createServerFn({ method: "GET" }).handle
   }
 
   return (crs ?? [])
-    .filter((cr) => isAdmin || cr.ba === userName || cr.itpm === userName)
+    .filter(
+      (cr) =>
+        isAdmin ||
+        cr.ba === userName ||
+        cr.itpm === userName ||
+        (!!cr.application && spocApplications.includes(cr.application)),
+    )
     .map((cr) => ({
       ...cr,
       testCaseCount: countByCr.get(cr.cr_number) ?? 0,
@@ -301,9 +311,23 @@ export const listSubmittedForApproval = createServerFn({ method: "GET" }).handle
 export const updateApproverComment = createServerFn({ method: "POST" })
   .inputValidator((data: { testCaseId: string; comment: string | null }) => data)
   .handler(async ({ data }) => {
-    const { isAdmin, isTestCaseApprover } = await requireSessionUser();
+    const { userName, isAdmin, isTestCaseApprover, spocApplications } = await requireSessionUser();
     if (!isAdmin && !isTestCaseApprover) throw new Error("Forbidden");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: row, error: fetchErr } = await supabaseAdmin
+      .from("test_cases")
+      .select("cr_number")
+      .eq("id", data.testCaseId)
+      .maybeSingle();
+    if (fetchErr) throw new Error(fetchErr.message);
+    if (!row) throw new Error("Test case not found");
+
+    // Same per-CR ownership check approveTestCases/sendBackTestCases use —
+    // being an approver in general doesn't mean you're the BA/ITPM (or
+    // application SPOC) for this specific CR.
+    await assertApproverForCr(supabaseAdmin, row.cr_number, userName, isAdmin, spocApplications);
+
     const { error } = await supabaseAdmin
       .from("test_cases")
       .update({ approver_comments: data.comment } as never)
@@ -312,21 +336,26 @@ export const updateApproverComment = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+// A caller passes if they're the CR's BA/ITPM, or if they're a SPOC for
+// the CR's application (spoc_applications on user_management) — either
+// grants the same approval rights.
 async function assertApproverForCr(
   supabaseAdmin: SupabaseClient<Database>,
   crNumber: string,
   userName: string,
   isAdmin: boolean,
+  spocApplications: string[],
 ) {
   if (isAdmin) return;
   const { data: cr, error } = await supabaseAdmin
     .from("crs")
-    .select("ba, itpm")
+    .select("ba, itpm, application")
     .eq("cr_number", crNumber)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (!cr || (cr.ba !== userName && cr.itpm !== userName)) {
-    throw new Error("Forbidden: you are not the BA/ITPM for this CR");
+  const isSpoc = !!cr?.application && spocApplications.includes(cr.application);
+  if (!cr || (cr.ba !== userName && cr.itpm !== userName && !isSpoc)) {
+    throw new Error("Forbidden: you are not the BA/ITPM or an application SPOC for this CR");
   }
 }
 
@@ -335,10 +364,10 @@ async function assertApproverForCr(
 export const approveTestCases = createServerFn({ method: "POST" })
   .inputValidator((data: { crNumber: string }) => data)
   .handler(async ({ data }) => {
-    const { userName, isAdmin, isTestCaseApprover } = await requireSessionUser();
+    const { userName, isAdmin, isTestCaseApprover, spocApplications } = await requireSessionUser();
     if (!isAdmin && !isTestCaseApprover) throw new Error("Forbidden");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await assertApproverForCr(supabaseAdmin, data.crNumber, userName, isAdmin);
+    await assertApproverForCr(supabaseAdmin, data.crNumber, userName, isAdmin, spocApplications);
 
     const { data: updated, error } = await supabaseAdmin
       .from("test_cases")
@@ -362,10 +391,10 @@ export const approveTestCases = createServerFn({ method: "POST" })
 export const sendBackTestCases = createServerFn({ method: "POST" })
   .inputValidator((data: { crNumber: string; overallComment?: string | null }) => data)
   .handler(async ({ data }) => {
-    const { userName, isAdmin, isTestCaseApprover } = await requireSessionUser();
+    const { userName, isAdmin, isTestCaseApprover, spocApplications } = await requireSessionUser();
     if (!isAdmin && !isTestCaseApprover) throw new Error("Forbidden");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await assertApproverForCr(supabaseAdmin, data.crNumber, userName, isAdmin);
+    await assertApproverForCr(supabaseAdmin, data.crNumber, userName, isAdmin, spocApplications);
 
     const { data: rows, error: fetchErr } = await supabaseAdmin
       .from("test_cases")
@@ -472,10 +501,25 @@ function parseTestCaseWorkbook(buffer: ArrayBuffer): TestCaseUploadRow[] {
 // Client-side parse (needs the browser File object) → server write, same
 // split as importCrCsv in csv-import.ts.
 export async function uploadTestCaseExcel(crNumber: string, file: File) {
+  assertFileSizeOk(file);
   const buffer = await file.arrayBuffer();
   const rows = parseTestCaseWorkbook(buffer);
   if (rows.length === 0) throw new Error("The uploaded file has no test case rows");
   return uploadTestCases({ data: { crNumber, rows } });
+}
+
+// Neutralizes spreadsheet formula injection (CWE-1236): a leading
+// =, +, -, @, tab, or CR makes Excel/Sheets interpret a cell as a formula
+// rather than text. Test case fields are free text supplied by Testers and
+// this workbook is opened by a higher-trust BA/ITPM/Admin approver, so a
+// malicious value here would execute in the approver's spreadsheet app.
+// Prefixing with a leading apostrophe is the standard "force text" marker
+// — Excel/Sheets render it as literal text and never evaluate it; values
+// that don't start with a risky character pass through unchanged.
+const FORMULA_TRIGGER = /^[=+\-@\t\r]/;
+
+function sanitizeCell(value: string): string {
+  return FORMULA_TRIGGER.test(value) ? `'${value}` : value;
 }
 
 // Builds a workbook client-side from already-fetched rows and triggers a
@@ -484,20 +528,20 @@ export async function uploadTestCaseExcel(crNumber: string, file: File) {
 export function downloadTestCasesExcel(crNumber: string, rows: TestCaseRow[]) {
   const worksheet = XLSX.utils.json_to_sheet(
     rows.map((r) => ({
-      "Test Case No": r.test_case_number,
-      "Test Priority": r.test_priority ?? "",
-      "Test Case Name": r.test_case_name,
-      "Test Condition": r.test_condition,
-      "Expected Result": r.expected_result,
-      "Tester Comments": r.tester_comments ?? "",
-      "Approver Comments": r.approver_comments ?? "",
+      "Test Case No": sanitizeCell(r.test_case_number),
+      "Test Priority": sanitizeCell(r.test_priority ?? ""),
+      "Test Case Name": sanitizeCell(r.test_case_name),
+      "Test Condition": sanitizeCell(r.test_condition),
+      "Expected Result": sanitizeCell(r.expected_result),
+      "Tester Comments": sanitizeCell(r.tester_comments ?? ""),
+      "Approver Comments": sanitizeCell(r.approver_comments ?? ""),
       Status: r.status,
-      "Uploaded By": r.uploaded_by,
+      "Uploaded By": sanitizeCell(r.uploaded_by),
       "Uploaded Date": r.uploaded_date,
-      "Approved By": r.approved_by ?? "",
+      "Approved By": sanitizeCell(r.approved_by ?? ""),
       "Approval Date": r.approval_date ?? "",
       "Execution Status": r.execution_status,
-      "Defect ID": r.defect_id ?? "",
+      "Defect ID": sanitizeCell(r.defect_id ?? ""),
     })),
   );
   const workbook = XLSX.utils.book_new();

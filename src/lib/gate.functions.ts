@@ -21,6 +21,7 @@ export const requireSessionUser = createServerOnlyFn(
     isAdmin: boolean;
     role: StaffRole | null;
     isTestCaseApprover: boolean;
+    spocApplications: string[];
   }> => {
     const request = getRequest();
     const authHeader = request?.headers.get("authorization");
@@ -48,7 +49,7 @@ export const requireSessionUser = createServerOnlyFn(
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("user_management")
-      .select("user_name, is_active, is_admin, role, is_test_case_approver")
+      .select("user_name, is_active, is_admin, role, is_test_case_approver, spoc_applications")
       .eq("email", email.trim().toLowerCase())
       .maybeSingle();
     if (profileError || !profile || !profile.is_active) {
@@ -61,6 +62,7 @@ export const requireSessionUser = createServerOnlyFn(
       isAdmin: profile.is_admin,
       role: profile.role,
       isTestCaseApprover: profile.is_test_case_approver,
+      spocApplications: profile.spoc_applications ?? [],
     };
   },
 );

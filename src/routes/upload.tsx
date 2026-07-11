@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { importCrCsv, type CsvImportResult } from "@/lib/csv-import";
 import { importDefectCsv, type DefectImportResult } from "@/lib/defect-import";
 import { recalculateAllKpis } from "@/lib/kpi-engine";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAppUser } from "@/lib/app-user";
 
 export const Route = createFileRoute("/upload")({
   head: () => ({ meta: [{ title: "Data Import · Kpisavvy" }] }),
@@ -17,6 +18,16 @@ export const Route = createFileRoute("/upload")({
 });
 
 function UploadPage() {
+  const { isAdmin, role, isLoading } = useAppUser();
+  const navigate = useNavigate();
+  const canAccess = isAdmin || role === "PMO" || role === "BA" || role === "ITPM";
+
+  useEffect(() => {
+    if (!isLoading && !canAccess) navigate({ to: "/" });
+  }, [isLoading, canAccess, navigate]);
+
+  if (isLoading || !canAccess) return null;
+
   return (
     <AppShell>
       <PageHeader

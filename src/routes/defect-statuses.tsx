@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
+import { useAppUser } from "@/lib/app-user";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,19 @@ export const Route = createFileRoute("/defect-statuses")({
 });
 
 function DefectStatusMapping() {
+  const { isAdmin, isLoading } = useAppUser();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isLoading && !isAdmin) navigate({ to: "/" });
+  }, [isLoading, isAdmin, navigate]);
+
+  if (isLoading || !isAdmin) return null;
+
+  return <DefectStatusMappingView />;
+}
+
+function DefectStatusMappingView() {
   const qc = useQueryClient();
   const [newStatus, setNewStatus] = useState("");
 

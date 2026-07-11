@@ -15,6 +15,7 @@ import { Route as UploadRouteImport } from './routes/upload'
 import { Route as TestCaseUploadRouteImport } from './routes/test-case-upload'
 import { Route as TestCaseApprovalRouteImport } from './routes/test-case-approval'
 import { Route as TatLogicRouteImport } from './routes/tat-logic'
+import { Route as SecurityReportRouteImport } from './routes/security-report'
 import { Route as KpisRouteImport } from './routes/kpis'
 import { Route as DefectStatusesRouteImport } from './routes/defect-statuses'
 import { Route as CrsRouteImport } from './routes/crs'
@@ -53,6 +54,11 @@ const TestCaseApprovalRoute = TestCaseApprovalRouteImport.update({
 const TatLogicRoute = TatLogicRouteImport.update({
   id: '/tat-logic',
   path: '/tat-logic',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SecurityReportRoute = SecurityReportRouteImport.update({
+  id: '/security-report',
+  path: '/security-report',
   getParentRoute: () => rootRouteImport,
 } as any)
 const KpisRoute = KpisRouteImport.update({
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/crs': typeof CrsRouteWithChildren
   '/defect-statuses': typeof DefectStatusesRoute
   '/kpis': typeof KpisRoute
+  '/security-report': typeof SecurityReportRoute
   '/tat-logic': typeof TatLogicRoute
   '/test-case-approval': typeof TestCaseApprovalRoute
   '/test-case-upload': typeof TestCaseUploadRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/crs': typeof CrsRouteWithChildren
   '/defect-statuses': typeof DefectStatusesRoute
   '/kpis': typeof KpisRoute
+  '/security-report': typeof SecurityReportRoute
   '/tat-logic': typeof TatLogicRoute
   '/test-case-approval': typeof TestCaseApprovalRoute
   '/test-case-upload': typeof TestCaseUploadRoute
@@ -144,6 +152,7 @@ export interface FileRoutesById {
   '/crs': typeof CrsRouteWithChildren
   '/defect-statuses': typeof DefectStatusesRoute
   '/kpis': typeof KpisRoute
+  '/security-report': typeof SecurityReportRoute
   '/tat-logic': typeof TatLogicRoute
   '/test-case-approval': typeof TestCaseApprovalRoute
   '/test-case-upload': typeof TestCaseUploadRoute
@@ -163,6 +172,7 @@ export interface FileRouteTypes {
     | '/crs'
     | '/defect-statuses'
     | '/kpis'
+    | '/security-report'
     | '/tat-logic'
     | '/test-case-approval'
     | '/test-case-upload'
@@ -180,6 +190,7 @@ export interface FileRouteTypes {
     | '/crs'
     | '/defect-statuses'
     | '/kpis'
+    | '/security-report'
     | '/tat-logic'
     | '/test-case-approval'
     | '/test-case-upload'
@@ -197,6 +208,7 @@ export interface FileRouteTypes {
     | '/crs'
     | '/defect-statuses'
     | '/kpis'
+    | '/security-report'
     | '/tat-logic'
     | '/test-case-approval'
     | '/test-case-upload'
@@ -215,6 +227,7 @@ export interface RootRouteChildren {
   CrsRoute: typeof CrsRouteWithChildren
   DefectStatusesRoute: typeof DefectStatusesRoute
   KpisRoute: typeof KpisRoute
+  SecurityReportRoute: typeof SecurityReportRoute
   TatLogicRoute: typeof TatLogicRoute
   TestCaseApprovalRoute: typeof TestCaseApprovalRoute
   TestCaseUploadRoute: typeof TestCaseUploadRoute
@@ -266,6 +279,13 @@ declare module '@tanstack/react-router' {
       path: '/tat-logic'
       fullPath: '/tat-logic'
       preLoaderRoute: typeof TatLogicRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/security-report': {
+      id: '/security-report'
+      path: '/security-report'
+      fullPath: '/security-report'
+      preLoaderRoute: typeof SecurityReportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/kpis': {
@@ -352,6 +372,7 @@ const rootRouteChildren: RootRouteChildren = {
   CrsRoute: CrsRouteWithChildren,
   DefectStatusesRoute: DefectStatusesRoute,
   KpisRoute: KpisRoute,
+  SecurityReportRoute: SecurityReportRoute,
   TatLogicRoute: TatLogicRoute,
   TestCaseApprovalRoute: TestCaseApprovalRoute,
   TestCaseUploadRoute: TestCaseUploadRoute,

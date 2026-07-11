@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kpisavvy — Source Code VAPT Report</title>
+<style>
+  :root{
+    --paper:#f2f3f5; --paper-raised:#ffffff; --ink:#14171c; --muted:#5b6270; --line:#dbdee3;
+    --accent:#2a3d66; --accent-soft:#e4e8f1;
+    --sev-critical:#b3261e; --sev-critical-bg:#fbeae8;
+    --sev-high:#a15208; --sev-high-bg:#faeee1;
+    --sev-medium:#8a6a08; --sev-medium-bg:#f8f0dc;
+    --sev-low:#2f5c78; --sev-low-bg:#e6eef3;
+    --sev-secure:#256b45; --sev-secure-bg:#e5f1e9;
+    --code-bg:#e9ebee; --code-ink:#1c2430;
+    --shadow: 0 1px 2px rgba(20,23,28,.06), 0 8px 24px -12px rgba(20,23,28,.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#14171c; --paper-raised:#1b1f27; --ink:#e8e9ec; --muted:#9aa1ad; --line:#2a2f3a;
+      --accent:#93a8d6; --accent-soft:#202a3d;
+      --sev-critical:#ff8a80; --sev-critical-bg:#3a1f1f;
+      --sev-high:#ffb677; --sev-high-bg:#3a2a17;
+      --sev-medium:#f0d271; --sev-medium-bg:#362f16;
+      --sev-low:#8ec2e6; --sev-low-bg:#182a35;
+      --sev-secure:#8fdcae; --sev-secure-bg:#173226;
+      --code-bg:#0f1319; --code-ink:#d7dbe2;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px -16px rgba(0,0,0,.6);
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+    font-size:16px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--accent-soft); }
+  a{ color:var(--accent); }
+  a:focus-visible, button:focus-visible, summary:focus-visible{
+    outline:2px solid var(--accent); outline-offset:2px;
+  }
+  h1,h2,h3,h4{
+    font-family:Georgia,"Iowan Old Style","Palatino Linotype","URW Palladio L",serif;
+    font-weight:600; text-wrap:balance; color:var(--ink); margin:0 0 .4em;
+  }
+  code, .mono, .field-val time, .stat b{
+    font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace;
+  }
+  .wrap{ max-width:960px; margin:0 auto; padding:0 24px 96px; }
+
+  .cover{
+    padding:64px 0 40px; border-bottom:1px solid var(--line);
+    margin-bottom:40px;
+  }
+  .eyebrow{
+    font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace;
+    font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent);
+    display:flex; align-items:center; gap:10px; margin-bottom:18px;
+  }
+  .eyebrow .dot{ width:7px; height:7px; border-radius:50%; background:var(--sev-secure); display:inline-block; }
+  .cover h1{ font-size:2.5rem; line-height:1.12; max-width:24ch; }
+  .cover .sub{ color:var(--muted); font-size:1.05rem; max-width:64ch; margin-top:12px; }
+  .cover-meta{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:20px;
+    margin-top:36px; padding-top:24px; border-top:1px solid var(--line);
+  }
+  .cover-meta div{ display:flex; flex-direction:column; gap:4px; }
+  .cover-meta .k{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  .cover-meta .v{ font-size:14px; font-variant-numeric:tabular-nums; }
+
+  .stats{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
+    background:var(--line); border:1px solid var(--line); border-radius:10px;
+    overflow:hidden; margin:28px 0 8px;
+  }
+  .stat{ background:var(--paper-raised); padding:18px 16px; text-align:left; }
+  .stat b{ display:block; font-size:1.7rem; font-weight:600; font-variant-numeric:tabular-nums; }
+  .stat span{ font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  .stat.resolved b{ color:var(--sev-secure); }
+  .stat.pending b{ color:var(--sev-high); }
+  .stat.accepted b{ color:var(--sev-low); }
+  .stat.secure b{ color:var(--sev-secure); }
+
+  section{ margin-top:56px; }
+  section > h2{
+    font-size:1.5rem; padding-bottom:12px; border-bottom:1px solid var(--line); margin-bottom:22px;
+    display:flex; align-items:baseline; gap:10px;
+  }
+  section > h2 .count{
+    font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace;
+    font-size:.8rem; color:var(--muted); font-weight:400;
+  }
+  section > p.lede{ color:var(--muted); max-width:70ch; margin:-10px 0 24px; }
+
+  .toc{
+    display:flex; flex-wrap:wrap; gap:8px 10px; margin:28px 0 0;
+    padding:16px 18px; background:var(--paper-raised); border:1px solid var(--line); border-radius:10px;
+  }
+  .toc a{
+    font-size:13px; text-decoration:none; color:var(--ink); padding:4px 10px;
+    border:1px solid var(--line); border-radius:100px; white-space:nowrap;
+  }
+  .toc a:hover{ border-color:var(--accent); color:var(--accent); }
+
+  table.index{ width:100%; border-collapse:collapse; font-size:14px; }
+  table.index th{
+    text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--muted); padding:8px 10px; border-bottom:1px solid var(--line);
+  }
+  table.index td{ padding:10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  table.index tr:last-child td{ border-bottom:none; }
+  table.index td.file{ color:var(--muted); white-space:nowrap; }
+  table.index a{ text-decoration:none; color:var(--ink); font-weight:600; }
+  table.index a:hover{ color:var(--accent); }
+
+  .chip{
+    display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700;
+    text-transform:uppercase; letter-spacing:.05em; padding:3px 9px; border-radius:100px;
+    font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace;
+    white-space:nowrap;
+  }
+  .chip.critical{ background:var(--sev-critical-bg); color:var(--sev-critical); }
+  .chip.high{ background:var(--sev-high-bg); color:var(--sev-high); }
+  .chip.medium{ background:var(--sev-medium-bg); color:var(--sev-medium); }
+  .chip.low{ background:var(--sev-low-bg); color:var(--sev-low); }
+  .chip.secure{ background:var(--sev-secure-bg); color:var(--sev-secure); }
+  .chip.resolved{ background:var(--sev-secure-bg); color:var(--sev-secure); }
+  .chip.pending{ background:var(--sev-high-bg); color:var(--sev-high); }
+  .chip.accepted{ background:var(--sev-low-bg); color:var(--sev-low); }
+  .chip-row{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+
+  .finding{
+    background:var(--paper-raised); border:1px solid var(--line); border-left-width:4px;
+    border-radius:8px; padding:22px 24px; margin-bottom:18px; box-shadow:var(--shadow);
+    scroll-margin-top:20px;
+  }
+  .finding[data-sev="critical"]{ border-left-color:var(--sev-critical); }
+  .finding[data-sev="high"]{ border-left-color:var(--sev-high); }
+  .finding[data-sev="medium"]{ border-left-color:var(--sev-medium); }
+  .finding[data-sev="low"]{ border-left-color:var(--sev-low); }
+  .finding[data-sev="secure"]{ border-left-color:var(--sev-secure); }
+  .finding[data-status="resolved"]{ border-left-color:var(--sev-secure); }
+  .finding[data-status="pending"]{ border-left-color:var(--sev-high); }
+
+  .finding-head{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:6px;
+  }
+  .finding-head h3{ font-size:1.15rem; margin:0; }
+  .finding-id{ color:var(--muted); font-size:.8em; font-weight:400; }
+  .loc{
+    font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace;
+    font-size:12.5px; color:var(--muted); margin:6px 0 16px; word-break:break-all;
+  }
+  .loc b{ color:var(--ink); font-weight:600; }
+
+  .resolution{
+    background:var(--sev-secure-bg); border:1px solid color-mix(in srgb, var(--sev-secure) 35%, transparent);
+    border-radius:7px; padding:12px 14px; margin:14px 0 4px;
+  }
+  .resolution.pending{
+    background:var(--sev-high-bg); border-color:color-mix(in srgb, var(--sev-high) 35%, transparent);
+  }
+  .resolution .k{
+    font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:700;
+    color:var(--sev-secure); margin-bottom:4px;
+  }
+  .resolution.pending .k{ color:var(--sev-high); }
+  .resolution p{ margin:0 0 6px; font-size:14px; }
+  .resolution p:last-child{ margin-bottom:0; }
+  .resolution ul{ margin:6px 0 0; padding-left:18px; font-size:14px; }
+
+  .field{ margin-top:14px; }
+  .field .k{
+    font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--muted);
+    margin-bottom:4px; font-weight:700;
+  }
+  .field .v{ font-size:14.5px; }
+  .field .v p{ margin:0 0 8px; }
+  .field .v p:last-child{ margin-bottom:0; }
+
+  .owasp-tag{
+    display:inline-block; font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace;
+    font-size:11px; background:var(--accent-soft); color:var(--accent); padding:2px 8px; border-radius:5px;
+  }
+
+  pre{
+    background:var(--code-bg); color:var(--code-ink); padding:14px 16px; border-radius:7px;
+    overflow-x:auto; font-size:12.5px; line-height:1.55; margin:8px 0 0; border:1px solid var(--line);
+  }
+  pre code{ background:none; padding:0; font-size:inherit; }
+  p code, li code{
+    background:var(--code-bg); padding:1px 6px; border-radius:4px; font-size:.88em;
+  }
+
+  details.original{ margin-top:14px; }
+  details.original > summary{
+    cursor:pointer; font-size:12.5px; color:var(--muted); font-weight:600;
+    text-transform:uppercase; letter-spacing:.05em;
+  }
+  details.original > summary:hover{ color:var(--accent); }
+  details.original .field:first-of-type{ margin-top:14px; }
+
+  .secure-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:720px){ .secure-grid{ grid-template-columns:1fr; } .stats{grid-template-columns:repeat(2,1fr);} .cover-meta{grid-template-columns:repeat(2,1fr);} }
+
+  footer{
+    margin-top:72px; padding-top:24px; border-top:1px solid var(--line);
+    color:var(--muted); font-size:12.5px; line-height:1.7;
+  }
+
+  table.owasp{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  table.owasp th{ text-align:left; font-size:11px; text-transform:uppercase; color:var(--muted); padding:8px 10px; border-bottom:1px solid var(--line); }
+  table.owasp td{ padding:9px 10px; border-bottom:1px solid var(--line); }
+  table.owasp code{ font-size:12px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="cover">
+    <div class="eyebrow"><span class="dot"></span> Confidential — Application Security Assessment · Remediation Status</div>
+    <h1>Kpisavvy CR/KPI Tracker<br>Source Code VAPT Report</h1>
+    <p class="sub">Full white-box review of the React + TanStack Start + Supabase/Postgres application, updated to reflect remediation work completed since the original assessment. 13 of 16 findings are fixed and verified, with every associated database migration executed against the live project; 3 were explicitly reviewed and accepted as risk rather than fixed.</p>
+    <div class="cover-meta">
+      <div><span class="k">Scope</span><span class="v">Full repository, working tree</span></div>
+      <div><span class="k">Method</span><span class="v">Static review + targeted runtime tests</span></div>
+      <div><span class="k">Original assessment</span><span class="v">2026-07-10</span></div>
+      <div><span class="k">Remediation status as of</span><span class="v">2026-07-12</span></div>
+    </div>
+  </div>
+
+  <section id="summary">
+    <h2>Remediation Summary</h2>
+    <p class="lede">Every finding from the original assessment was worked through with the team, one at a time — explained, scoped against real business rules (who should actually be allowed to do what), fixed, verified with an actual runtime test rather than just a type-check, and every associated database migration confirmed run against the live project. Three were deliberately reviewed and accepted as risk rather than fixed, each for a stated, specific reason.</p>
+
+    <div class="stats">
+      <div class="stat resolved"><b>13</b><span>Fixed &amp; verified</span></div>
+      <div class="stat pending"><b>0</b><span>Action pending</span></div>
+      <div class="stat accepted"><b>3</b><span>Accepted risk</span></div>
+      <div class="stat secure"><b>10</b><span>Verified secure</span></div>
+    </div>
+
+    <table class="index" style="margin-top:28px">
+      <tr><th>ID</th><th>Finding</th><th>Severity</th><th style="width:20%">Status</th></tr>
+      <tr><td class="mono">C1</td><td><a href="#c1">Client-supplied metadata escalates to Admin role</a></td><td><span class="chip critical">Critical</span></td><td><span class="chip resolved">Resolved</span></td></tr>
+      <tr><td class="mono">C2</td><td><a href="#c2">Missing authorization on bulk data-mutation functions</a></td><td><span class="chip critical">Critical</span></td><td><span class="chip resolved">Resolved</span></td></tr>
+      <tr><td class="mono">C3</td><td><a href="#c3">Live service-role key + plaintext employee credentials</a></td><td><span class="chip critical">Critical</span></td><td><span class="chip accepted">Fixed + accepted risk</span></td></tr>
+      <tr><td class="mono">H1</td><td><a href="#h1">Two unsynchronized authorization systems</a></td><td><span class="chip high">High</span></td><td><span class="chip resolved">Resolved</span></td></tr>
+      <tr><td class="mono">H2</td><td><a href="#h2">Unmaintained dependency: xlsx@0.18.5</a></td><td><span class="chip high">High</span></td><td><span class="chip resolved">Resolved</span></td></tr>
+      <tr><td class="mono">H3</td><td><a href="#h3">Formula/CSV injection in exported test-case workbook</a></td><td><span class="chip high">High</span></td><td><span class="chip resolved">Resolved</span></td></tr>
+      <tr><td class="mono">H4</td><td><a href="#h4">No password-strength policy on account creation</a></td><td><span class="chip high">High</span></td><td><span class="chip resolved">Resolved (N/A)</span></td></tr>
+      <tr><td class="mono">H5</td><td><a href="#h5">No brute-force / rate-limit protection on login</a></td><td><span class="chip high">High</span></td><td><span class="chip resolved">Resolved</span></td></tr>
+      <tr><td class="mono">M1</td><td><a href="#m1">Mass-assignment via client-controlled column name</a></td><td><span class="chip medium">Medium</span></td><td><span class="chip resolved">Resolved</span></td></tr>
+      <tr><td class="mono">M2</td><td><a href="#m2">Horizontal privilege gap on approver comments</a></td><td><span class="chip medium">Medium</span></td><td><span class="chip resolved">Resolved</span></td></tr>
+      <tr><td class="mono">M3</td><td><a href="#m3">Deactivated users keep a live JWT until expiry</a></td><td><span class="chip medium">Medium</span></td><td><span class="chip accepted">Accepted risk</span></td></tr>
+      <tr><td class="mono">M4</td><td><a href="#m4">No security response headers configured</a></td><td><span class="chip medium">Medium</span></td><td><span class="chip resolved">Resolved</span></td></tr>
+      <tr><td class="mono">M5</td><td><a href="#m5">No size/row limits on CSV/Excel uploads</a></td><td><span class="chip medium">Medium</span></td><td><span class="chip resolved">Resolved</span></td></tr>
+      <tr><td class="mono">L1</td><td><a href="#l1">CR/test-case data unscoped across all authenticated roles</a></td><td><span class="chip low">Low</span></td><td><span class="chip resolved">Resolved</span></td></tr>
+      <tr><td class="mono">L2</td><td><a href="#l2">Session tokens kept in localStorage</a></td><td><span class="chip low">Low</span></td><td><span class="chip accepted">Accepted risk</span></td></tr>
+      <tr><td class="mono">L3</td><td><a href="#l3">Dead credential material still present in .env</a></td><td><span class="chip low">Low</span></td><td><span class="chip resolved">Resolved</span></td></tr>
+    </table>
+  </section>
+
+  <nav class="toc" aria-label="Section navigation">
+    <a href="#critical-findings">Critical</a>
+    <a href="#high-findings">High</a>
+    <a href="#medium-findings">Medium</a>
+    <a href="#low-findings">Low</a>
+    <a href="#enhancements">Post-remediation additions</a>
+    <a href="#secure">Verified secure</a>
+    <a href="#dependencies">Dependencies</a>
+    <a href="#owasp">OWASP mapping</a>
+    <a href="#outstanding">Final status</a>
+  </nav>
+
+  <section id="critical-findings">
+    <h2>Critical Findings <span class="count">3</span></h2>
+
+    <article class="finding" data-sev="critical" data-status="resolved" id="c1">
+      <div class="finding-head">
+        <h3>Client-supplied signup metadata is trusted to grant the Admin role <span class="finding-id">C1</span></h3>
+        <div class="chip-row"><span class="chip critical">Critical</span><span class="chip resolved">Resolved</span></div>
+      </div>
+      <div class="loc"><b>supabase/migrations/20260701070000_c3f8a6d1…sql</b> · <b>src/lib/user-management.functions.ts</b> · <b>src/routes/users.tsx</b></div>
+
+      <div class="resolution">
+        <div class="k">Resolution</div>
+        <p><code>public.profiles</code>, <code>public.app_role</code>, the <code>handle_new_user</code> trigger, and <code>current_user_role()</code> were dropped entirely (migration <code>20260710000000_drop_profiles_use_user_management.sql</code>, executed against the live database). The <code>/users</code> admin panel was rebuilt to authorize through <code>user_management.is_admin</code> — the same source of truth every other feature in the app already trusted — with account creation now provisioning both the Supabase Auth login and the <code>user_management</code> row together (rolling back the auth account if either half fails, so nothing gets orphaned).</p>
+        <p>There is no longer any code path that reads client-editable signup metadata for an authorization decision, anywhere in the app. Verified: signing in and out works end to end against the new system.</p>
+      </div>
+
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p>
+        A second, independent authorization system existed alongside the app's primary one. The <code>handle_new_user()</code> trigger fired on every insert into <code>auth.users</code> and set the new <code>profiles.role</code> straight from <code>NEW.raw_user_meta_data-&gt;&gt;'role'</code> — the <code>user_metadata</code> field, attacker-writable at signup time. <code>profiles.role = 'Admin'</code> gated the <code>/users</code> screen, which could create and delete real Supabase Auth accounts and grant Admin to others.
+        </p></div></div>
+        <div class="field"><div class="k">Attack scenario</div><div class="v"><p>
+        An attacker calling <code>supabase.auth.signUp({ email, password, options: { data: { role: "Admin" } } })</code> directly against the project's public URL/anon key — no app code involved — would have their <code>profiles</code> row seeded with <code>role = 'Admin'</code> by the trigger, then could sign in and reach the Admin account-management panel.
+        </p></div></div>
+        <div class="field"><div class="k">OWASP mapping</div><div class="v"><span class="owasp-tag">A01 Broken Access Control</span> &nbsp; <span class="owasp-tag">A04 Insecure Design</span></div></div>
+      </details>
+    </article>
+
+    <article class="finding" data-sev="critical" data-status="resolved" id="c2">
+      <div class="finding-head">
+        <h3>Missing function-level authorization on bulk data-mutation server functions <span class="finding-id">C2</span></h3>
+        <div class="chip-row"><span class="chip critical">Critical</span><span class="chip resolved">Resolved</span></div>
+      </div>
+      <div class="loc"><b>csv-import.ts</b> · <b>defect-import.ts</b> · <b>crs-admin.functions.ts</b> · <b>defect-status.functions.ts</b></div>
+
+      <div class="resolution">
+        <div class="k">Resolution</div>
+        <p>Role checks were added matching the business rules the team specified directly:</p>
+        <ul>
+          <li><b>CR/Defect CSV import</b> — Admin, PMO, BA, or ITPM.</li>
+          <li><b>CR size/notes edits, bulk-drop, workflow-status edits</b> — PMO, BA, or ITPM <em>only</em>. Admin was deliberately excluded here, a scope narrower than the original recommendation, per an explicit decision that CR data entry isn't an Admin function.</li>
+          <li><b>Defect status mapping writes</b> — Admin only.</li>
+        </ul>
+        <p>Client-side route guards were added to <code>/cr-sizes</code>, <code>/upload</code>, and <code>/defect-statuses</code> to match — including removing "CR Size Management" from the nav entirely for anyone who doesn't hold PMO/BA/ITPM, so there's no longer a visible link that just bounces the visitor back to the dashboard.</p>
+      </div>
+
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p>
+        Since RLS is locked to <code>service_role</code> only, authorization was entirely the server function's responsibility. <code>importCrRows</code>/<code>importDefectRows</code>, and every write in <code>crs-admin.functions.ts</code> and <code>defect-status.functions.ts</code>, called only <code>requireSessionUser()</code> — proving the caller was <em>any</em> active, logged-in user — with no role check at all. A "Tester" account, meant to see only Dashboard and Test Case Upload, could bulk-overwrite the entire CR/Defect dataset or mark every CR as dropped.
+        </p></div></div>
+        <div class="field"><div class="k">OWASP mapping</div><div class="v"><span class="owasp-tag">A01 Broken Access Control</span></div></div>
+      </details>
+    </article>
+
+    <article class="finding" data-sev="critical" data-status="accepted" id="c3">
+      <div class="finding-head">
+        <h3>Live Supabase service-role key and plaintext employee credentials in working-tree <code>.env</code> <span class="finding-id">C3</span></h3>
+        <div class="chip-row"><span class="chip critical">Critical</span><span class="chip accepted">Fixed + accepted risk</span></div>
+      </div>
+      <div class="loc"><b>.env</b></div>
+
+      <div class="resolution">
+        <div class="k">Resolution — key rotated; two residual items accepted as risk</div>
+        <p><code>.env</code> is cleaned up: the four employees' plaintext credentials (<code>AUTH_USER1-4</code>) and the unused <code>SESSION_SECRET</code> are deleted. The service-role key was rotated once already, but to the wrong key type (the new-format <em>publishable</em> key, which was never the secret) — this was caught on re-scan and corrected to a proper <code>sb_secret_...</code> key. Login was confirmed working end to end against the new key, which closes the actual exploitable part of this finding — the live key that had full RLS-bypass database access.</p>
+        <p><b>Two remaining items were reviewed and explicitly accepted as risk, not fixed:</b></p>
+        <ul>
+          <li><b>Old legacy <code>service_role</code> key left unrevoked.</b> It remains a valid, usable credential until explicitly revoked in the Supabase dashboard.</li>
+          <li><b>Four employees' passwords left unreset.</b> Confirmed this is a UAT-only environment — production will run on an entirely separate, freshly-provisioned user set (new emails, new passwords, not derived from this data), so the blast radius of these credentials is bounded to UAT rather than carrying forward.</li>
+        </ul>
+      </div>
+
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p>
+        <code>.env</code> contained a live <code>SUPABASE_SERVICE_ROLE_KEY</code> (bypasses RLS entirely), a <code>SESSION_SECRET</code>, and four named employees' real email addresses with plaintext passwords. Verified directly: the file is gitignored and has never been committed to this repository's history — the exposure was local-filesystem-only, not a git leak.
+        </p></div></div>
+        <div class="field"><div class="k">OWASP mapping</div><div class="v"><span class="owasp-tag">A02 Cryptographic Failures</span> &nbsp; <span class="owasp-tag">A05 Security Misconfiguration</span></div></div>
+      </details>
+    </article>
+  </section>
+
+  <section id="high-findings">
+    <h2>High Findings <span class="count">5</span></h2>
+
+    <article class="finding" data-sev="high" data-status="resolved" id="h1">
+      <div class="finding-head">
+        <h3>Two independent, unsynchronized authorization systems <span class="finding-id">H1</span></h3>
+        <div class="chip-row"><span class="chip high">High</span><span class="chip resolved">Resolved</span></div>
+      </div>
+      <div class="loc"><b>current-user.tsx</b> · <b>gate.functions.ts</b> · <b>user-management.functions.ts</b></div>
+      <div class="resolution">
+        <div class="k">Resolution</div>
+        <p>Fixed as a direct side effect of C1. Verified with a full repository grep: zero remaining references to <code>profiles</code>, <code>app_role</code>, or the old <code>useCurrentUser</code> hook anywhere in <code>src/</code>. Every module that makes an authorization decision — user management, CR admin, CSV import, defect status, KPI config, CR allocation, test cases, scoped data, workflow statuses — funnels through the single <code>requireSessionUser()</code> → <code>user_management</code> path. <code>current-user.tsx</code> was simplified down to just "is there a session," with role/admin logic living exclusively in <code>useAppUser()</code>.</p>
+      </div>
+    </article>
+
+    <article class="finding" data-sev="high" data-status="resolved" id="h2">
+      <div class="finding-head">
+        <h3>Unmaintained dependency with known CVEs: <code>xlsx@0.18.5</code> <span class="finding-id">H2</span></h3>
+        <div class="chip-row"><span class="chip high">High</span><span class="chip resolved">Resolved</span></div>
+      </div>
+      <div class="loc"><b>package.json</b> · <b>test-cases.functions.ts</b></div>
+      <div class="resolution">
+        <div class="k">Resolution</div>
+        <p>The dependency now points at SheetJS's own CDN release (<code>https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz</code>) instead of the npm registry's permanently-frozen, vulnerable <code>0.18.5</code>. Resolved to <code>0.20.3</code> in the lockfile, with a pinned integrity hash; <code>npm audit</code> reports 0 vulnerabilities. No application code changed — the parse/write APIs the app uses are stable across versions. Verified beyond the type-check: round-tripped the exact <code>json_to_sheet</code> → <code>write</code> → <code>read</code> → <code>sheet_to_json</code> sequence <code>test-cases.functions.ts</code> uses, with synthetic data, and confirmed the output matched the input exactly.</p>
+      </div>
+    </article>
+
+    <article class="finding" data-sev="high" data-status="resolved" id="h3">
+      <div class="finding-head">
+        <h3>Formula/CSV injection in the exported test-case workbook <span class="finding-id">H3</span></h3>
+        <div class="chip-row"><span class="chip high">High</span><span class="chip resolved">Resolved</span></div>
+      </div>
+      <div class="loc"><b>test-cases.functions.ts</b> — <code>downloadTestCasesExcel</code></div>
+      <div class="resolution">
+        <div class="k">Resolution</div>
+        <p>Added a <code>sanitizeCell</code> guard applied to every free-text field before it's written to a spreadsheet cell: any value starting with <code>=</code>, <code>+</code>, <code>-</code>, <code>@</code>, tab, or carriage return gets prefixed with a leading apostrophe, the standard "force text, never a formula" marker. Verified with a real payload, not just review: wrote a <code>=HYPERLINK("http://evil.example",...)</code> string through the actual write/read path and confirmed the resulting cell is <code>type: "s"</code> (string) — never <code>type: "f"</code> (formula) — so Excel/Sheets can never execute it.</p>
+      </div>
+    </article>
+
+    <article class="finding" data-sev="high" data-status="resolved" id="h4">
+      <div class="finding-head">
+        <h3>No password-strength policy on account creation <span class="finding-id">H4</span></h3>
+        <div class="chip-row"><span class="chip high">High</span><span class="chip resolved">Resolved (N/A)</span></div>
+      </div>
+      <div class="loc"><b>user-management.functions.ts</b> · <b>routes/users.tsx</b></div>
+      <div class="resolution">
+        <div class="k">Resolution</div>
+        <p>In-app account creation is disabled by decision — accounts are now provisioned directly in Supabase instead. <code>/users</code> shows a static "not available yet" placeholder; <code>listUsers</code>/<code>createUserAccount</code>/<code>updateUserFields</code>/<code>deleteUserAccount</code> are commented out, with the full original implementation preserved in-file (including a <code>TODO</code> marking exactly where a password-strength check needs to go if this feature returns). With no active code path that sets a password, there's nothing left to have a policy on.</p>
+      </div>
+    </article>
+
+    <article class="finding" data-sev="high" data-status="resolved" id="h5">
+      <div class="finding-head">
+        <h3>No application-level brute-force protection on login <span class="finding-id">H5</span></h3>
+        <div class="chip-row"><span class="chip high">High</span><span class="chip resolved">Resolved</span></div>
+      </div>
+      <div class="loc"><b>routes/auth.tsx</b> · <b>lib/auth.functions.ts</b> (new) · <b>login_attempts</b> (new table)</div>
+      <div class="resolution">
+        <div class="k">Resolution</div>
+        <p>The browser no longer calls Supabase Auth directly. A new server function, <code>signIn</code>, sits in front of it: it checks a new <code>login_attempts</code> table for an active lockout and rejects immediately — without ever contacting Supabase — if the email has 5 failures within the last 15 minutes; otherwise it calls Supabase Auth from the server and hands session tokens back to the client to hydrate via <code>setSession()</code>. Migration executed against the live database; login confirmed working end to end.</p>
+        <p>Verified with a standalone simulation of the lockout math across a full sequence: 4 failures stay unlocked, the 5th triggers a 15-minute lockout, a check mid-lockout stays blocked, a check after expiry unblocks automatically, and a failure arriving long after the attempt window correctly resets the counter rather than accumulating forever.</p>
+        <p><b>Scope, stated plainly:</b> this protects traffic through your own login form. It cannot stop someone who calls Supabase's own auth endpoint directly with the public key, bypassing the app entirely — that gap is closed only by Supabase's own platform-level rate limiting (dashboard) and, if desired later, CAPTCHA.</p>
+      </div>
+    </article>
+  </section>
+
+  <section id="medium-findings">
+    <h2>Medium Findings <span class="count">5</span></h2>
+
+    <article class="finding" data-sev="medium" data-status="resolved" id="m1">
+      <div class="finding-head">
+        <h3>Mass-assignment via client-controlled column name <span class="finding-id">M1</span></h3>
+        <div class="chip-row"><span class="chip medium">Medium</span><span class="chip resolved">Resolved</span></div>
+      </div>
+      <div class="loc"><b>crs-admin.functions.ts</b> — <code>updateCrWorkflowStatus</code></div>
+      <div class="resolution">
+        <div class="k">Resolution</div>
+        <p>Fixed in the same pass as C2. <code>dbColumn</code> is now validated against real <code>workflow_statuses.db_column</code> values before being used as a dynamic update key — a caller can no longer aim the write at an arbitrary <code>crs</code> column like <code>ba</code> or <code>title</code>.</p>
+      </div>
+    </article>
+
+    <article class="finding" data-sev="medium" data-status="resolved" id="m2">
+      <div class="finding-head">
+        <h3>Horizontal privilege gap: approver comments editable across CRs <span class="finding-id">M2</span></h3>
+        <div class="chip-row"><span class="chip medium">Medium</span><span class="chip resolved">Resolved</span></div>
+      </div>
+      <div class="loc"><b>test-cases.functions.ts</b> — <code>updateApproverComment</code></div>
+      <div class="resolution">
+        <div class="k">Resolution</div>
+        <p><code>updateApproverComment</code> now looks up the test case's CR number first, then runs it through the same <code>assertApproverForCr</code> ownership check its siblings (<code>approveTestCases</code>, <code>sendBackTestCases</code>) already used — an approver can no longer edit comments on a CR they have no relation to.</p>
+      </div>
+    </article>
+
+    <article class="finding" data-sev="medium" data-status="accepted" id="m3">
+      <div class="finding-head">
+        <h3>Deactivated user does not revoke their live session <span class="finding-id">M3</span></h3>
+        <div class="chip-row"><span class="chip medium">Medium</span><span class="chip accepted">Accepted risk</span></div>
+      </div>
+      <div class="loc"><b>gate.functions.ts</b></div>
+      <div class="resolution">
+        <div class="k">Status — accepted, by explicit decision</div>
+        <p>The residual risk here dropped further as a side effect of C1: the original concern was a stale-but-valid JWT reading data directly via RLS (specifically the <code>profiles</code> table), and that entire table no longer exists — direct data access via a lingering session is now completely closed, on every table, not just this one. What remains is narrower: a deactivated user's Supabase Auth session keeps silently refreshing until it naturally expires, even though every app feature rejects them immediately via the <code>is_active</code> check on every request.</p>
+        <p>Two real fixes were evaluated — a Postgres trigger + <code>pg_net</code> call to the Auth Admin API, or a manual "revoke session" step alongside deactivating someone in Supabase Studio — and both were set aside given the reduced impact and the added infrastructure cost.</p>
+      </div>
+    </article>
+
+    <article class="finding" data-sev="medium" data-status="resolved" id="m4">
+      <div class="finding-head">
+        <h3>No security response headers configured <span class="finding-id">M4</span></h3>
+        <div class="chip-row"><span class="chip medium">Medium</span><span class="chip resolved">Resolved</span></div>
+      </div>
+      <div class="loc"><b>server.ts</b></div>
+      <div class="resolution">
+        <div class="k">Resolution</div>
+        <p>CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and HSTS are now applied in <code>server.ts</code> — the one point every request passes through regardless of host — deliberately as application code rather than a platform-specific config file (Vercel/Cloudflare/AWS/on-prem all run the same server entry, so headers apply the same way everywhere the app is deployed).</p>
+        <p><b>Caught and fixed a real regression during rollout</b>, not just claimed success: the initial CSP's <code>script-src 'self'</code> blocked TanStack Start's inline hydration bootstrap script, causing a blank white page on load. Diagnosed by fetching the page directly and inspecting the response headers and HTML body, confirmed the inline <code>&lt;script&gt;</code> tag was the cause, and corrected the policy to <code>script-src 'self' 'unsafe-inline'</code> — the one necessary loosening, with every other directive (<code>connect-src</code>, <code>frame-ancestors</code>, etc.) staying fully restrictive.</p>
+      </div>
+    </article>
+
+    <article class="finding" data-sev="medium" data-status="resolved" id="m5">
+      <div class="finding-head">
+        <h3>No size or row-count limits on CSV/Excel uploads <span class="finding-id">M5</span></h3>
+        <div class="chip-row"><span class="chip medium">Medium</span><span class="chip resolved">Resolved</span></div>
+      </div>
+      <div class="loc"><b>upload-limits.ts</b> (new) · csv-import.ts · defect-import.ts · test-cases.functions.ts</div>
+      <div class="resolution">
+        <div class="k">Resolution</div>
+        <p>New shared <code>upload-limits.ts</code> enforces a 10MB file-size ceiling client-side, before parsing starts, and a 10,000-row ceiling server-side, before the upsert loop starts — across all three upload paths (CR CSV, Defect CSV, Test Case Excel). Boundary-tested directly: 9.9MB/9,999 rows pass, 10.1MB/10,001 rows reject with a clear message. A locale-formatting bug in the error message (numbers rendering as <code>20,00,000</code> instead of <code>2,000,000</code> depending on the server's default locale) was caught during that verification and fixed by pinning <code>en-US</code> explicitly.</p>
+      </div>
+    </article>
+  </section>
+
+  <section id="low-findings">
+    <h2>Low / Informational Findings <span class="count">3</span></h2>
+
+    <article class="finding" data-sev="low" data-status="resolved" id="l1">
+      <div class="finding-head">
+        <h3>CR and test-case data visible to any authenticated role by design <span class="finding-id">L1</span></h3>
+        <div class="chip-row"><span class="chip low">Low</span><span class="chip resolved">Resolved</span></div>
+      </div>
+      <div class="loc"><b>test-cases.functions.ts</b> · <b>gate.functions.ts</b> · <code>spoc_applications</code> (new column)</div>
+      <div class="resolution">
+        <div class="k">Resolution — extended beyond the original recommendation, migration executed</div>
+        <p>Rather than a narrow fix, this became a real feature addition, defined directly with the team: a new <b>SPOC (single point of contact) model</b>. <code>user_management.spoc_applications</code> (a text array, assigned directly in Supabase) grants a user the same test-case approval rights as being a CR's BA/ITPM, for every CR under any of their assigned Applications — regardless of who's actually listed as BA/ITPM on that specific CR.</p>
+        <p>Wired into <code>assertApproverForCr</code> (the actual enforcement point behind approve/send-back/comment) and <code>listSubmittedForApproval</code> (the approver's worklist, so someone's queue actually reflects what they're allowed to act on). Deliberately scoped to test-case approval only — the Tester's shared upload pool and general CR/KPI/Defects visibility were left untouched, per explicit instruction. Verified against seven scenarios (Admin bypass, BA match, ITPM match, correct-application SPOC match, wrong-application SPOC non-match, no relation at all, and a CR with a null application) — all passed.</p>
+        <p>As a related hardening in the same area: test case <b>execution status</b> updates (as opposed to approval) were separately restricted to the Tester role with no Admin bypass — the one write action in the app where Admin doesn't get automatic access, by explicit decision, while Admin retains full read visibility everywhere.</p>
+        <p>Migration <code>20260712000000_spoc_applications.sql</code> has been run against the live database — this is now actually enforced, not just present in code.</p>
+      </div>
+    </article>
+
+    <article class="finding" data-sev="low" data-status="accepted" id="l2">
+      <div class="finding-head">
+        <h3>Session tokens stored in <code>localStorage</code> <span class="finding-id">L2</span></h3>
+        <div class="chip-row"><span class="chip low">Low</span><span class="chip accepted">Accepted risk</span></div>
+      </div>
+      <div class="loc"><b>integrations/supabase/client.ts</b></div>
+      <div class="resolution">
+        <div class="k">Status — accepted, by recommendation</div>
+        <p>Left as-is. This is the Supabase SDK's own default for browser apps, and the risk is specifically about defense-in-depth against a future XSS bug — the audit found no actual injection point to exploit today. Moving to a server-brokered httpOnly-cookie session would be a real architectural change, not justified without a concrete vector to defend against.</p>
+      </div>
+    </article>
+
+    <article class="finding" data-sev="low" data-status="resolved" id="l3">
+      <div class="finding-head">
+        <h3>Dead credential material still present in <code>.env</code> <span class="finding-id">L3</span></h3>
+        <div class="chip-row"><span class="chip low">Low</span><span class="chip resolved">Resolved</span></div>
+      </div>
+      <div class="loc"><b>.env</b></div>
+      <div class="resolution">
+        <div class="k">Resolution</div>
+        <p><code>AUTH_USER1-4</code> and the unused <code>SESSION_SECRET</code> were deleted from <code>.env</code>, alongside the C3 cleanup.</p>
+      </div>
+    </article>
+  </section>
+
+  <section id="enhancements">
+    <h2>Post-Remediation Additions</h2>
+    <p class="lede">Two changes went beyond fixing what the original assessment found — real business rules the team wanted enforced, surfaced while working through L1 and the C2 role assignments.</p>
+    <div class="secure-grid">
+      <article class="finding" data-sev="secure">
+        <div class="finding-head"><h3>SPOC-application approval model</h3><span class="chip secure">Added</span></div>
+        <p>A new authorization dimension — application-level SPOCs can approve test cases across every CR under their assigned application(s), not just CRs where they're personally listed as BA/ITPM. See <a href="#l1">L1</a> for the full detail and verification.</p>
+      </article>
+      <article class="finding" data-sev="secure">
+        <div class="finding-head"><h3>Tester-exclusive execution status</h3><span class="chip secure">Added</span></div>
+        <p>Test execution results (<code>updateExecutionStatus</code>) are now the one write action in the app with no Admin bypass, on both the server check and the matching client-side control — while Admin keeps full read visibility everywhere, confirmed as the intended model.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="secure">
+    <h2>Verified Secure / Not Exploitable <span class="count">10</span></h2>
+    <p class="lede">Unchanged from the original assessment except where the remediation work itself strengthened one of these further — noted below.</p>
+    <div class="secure-grid">
+
+      <article class="finding" data-sev="secure" id="s1">
+        <div class="finding-head"><h3>RLS locked to <code>service_role</code> only</h3><span class="chip secure">Secure</span></div>
+        <p>Every application table's open policy was dropped and <code>anon</code>/<code>authenticated</code> grants revoked. All reads/writes are mediated by service-role server functions.</p>
+      </article>
+
+      <article class="finding" data-sev="secure" id="s2">
+        <div class="finding-head"><h3><code>profiles</code> — removed entirely</h3><span class="chip secure">Superseded</span></div>
+        <p>Originally verified as correctly-scoped RLS. As of the C1 fix, the table doesn't exist anymore at all — stronger than "secure," there's nothing left to secure.</p>
+      </article>
+
+      <article class="finding" data-sev="secure" id="s3">
+        <div class="finding-head"><h3>No SQL injection surface found</h3><span class="chip secure">Secure</span></div>
+        <p>Every data access goes through the parameterized supabase-js query builder. No raw SQL string concatenation exists anywhere in application code or migrations, including everything added during remediation.</p>
+      </article>
+
+      <article class="finding" data-sev="secure" id="s4">
+        <div class="finding-head"><h3>No exploitable XSS sink</h3><span class="chip secure">Secure</span></div>
+        <p>React's default JSX escaping covers every place CR/defect/test-case text is rendered. The sole <code>dangerouslySetInnerHTML</code> in the codebase builds CSS from developer-supplied theme config, never end-user input.</p>
+      </article>
+
+      <article class="finding" data-sev="secure" id="s5">
+        <div class="finding-head"><h3>CSRF structurally mitigated</h3><span class="chip secure">Secure</span></div>
+        <p>Server-function calls authenticate via a custom <code>Authorization: Bearer</code> header, not an ambient cookie — a cross-site request can't forge this without already running same-origin JS.</p>
+      </article>
+
+      <article class="finding" data-sev="secure" id="s6">
+        <div class="finding-head"><h3>JWTs verified properly, not decoded by hand</h3><span class="chip secure">Secure</span></div>
+        <p><code>supabase.auth.getClaims(token)</code> is used for signature/claims verification everywhere, including the new server-mediated sign-in path added for H5.</p>
+      </article>
+
+      <article class="finding" data-sev="secure" id="s7">
+        <div class="finding-head"><h3>No secrets leaked to the client bundle</h3><span class="chip secure">Secure</span></div>
+        <p>The built production JS bundle was checked directly for the service-role key and other server-only env values — none present. <code>VITE_</code>-prefix discipline is correctly followed.</p>
+      </article>
+
+      <article class="finding" data-sev="secure" id="s8">
+        <div class="finding-head"><h3>No stack traces or SQL errors reach the client</h3><span class="chip secure">Secure</span></div>
+        <p>Uncaught server errors render a static, information-free HTML page; full error detail is only ever passed to <code>console.error</code> server-side.</p>
+      </article>
+
+      <article class="finding" data-sev="secure" id="s9">
+        <div class="finding-head"><h3>No Supabase Storage attack surface</h3><span class="chip secure">Secure</span></div>
+        <p>No usage of <code>supabase.storage</code>, buckets, or file hosting anywhere in the codebase — all "uploads" are parsed client-side into structured rows and never stored as files.</p>
+      </article>
+
+      <article class="finding" data-sev="secure" id="s10">
+        <div class="finding-head"><h3>Race conditions handled where it matters most</h3><span class="chip secure">Secure</span></div>
+        <p><code>claimCr</code>'s atomic conditional update, the KPI engine's singleton lock, and status-filtered test-case transitions all prevent double-claim/double-approval/concurrent-recalc corruption. The new login lockout counter (H5) follows the same discipline — verified against a full attempt-sequence simulation, including window-expiry reset behavior.</p>
+      </article>
+
+    </div>
+  </section>
+
+  <section id="dependencies">
+    <h2>Dependency Review</h2>
+    <table class="index">
+      <tr><th>Package</th><th>Resolved</th><th>Status</th></tr>
+      <tr><td class="mono">xlsx</td><td class="mono">0.20.3</td><td><span class="chip resolved">Fixed</span> — was 0.18.5 (unmaintained, known CVEs), now SheetJS CDN release. See <a href="#h2">H2</a>.</td></tr>
+      <tr><td class="mono">@supabase/supabase-js</td><td class="mono">2.110.0</td><td>Current at review time; no known critical advisories.</td></tr>
+      <tr><td class="mono">papaparse</td><td class="mono">5.5.4</td><td>Current; unchanged.</td></tr>
+      <tr><td class="mono">react / react-dom</td><td class="mono">19.2.0</td><td>Current major release; unchanged.</td></tr>
+      <tr><td class="mono">zod</td><td class="mono">3.24.2</td><td>Still not wired into <code>createServerFn</code> input validators — unchanged from original assessment, not addressed in this remediation pass.</td></tr>
+    </table>
+  </section>
+
+  <section id="owasp">
+    <h2>OWASP Top 10 (2021) Mapping</h2>
+    <table class="owasp">
+      <tr><th>Category</th><th>Original</th><th>Now</th><th>Findings</th></tr>
+      <tr><td>A01 Broken Access Control</td><td><span class="chip critical">Critical</span></td><td><span class="chip resolved">Resolved</span></td><td><code>C1</code> <code>C2</code> <code>M1</code> <code>M2</code></td></tr>
+      <tr><td>A02 Cryptographic Failures</td><td><span class="chip critical">Critical</span></td><td><span class="chip accepted">Accepted risk</span></td><td><code>C3</code> <code>L2</code></td></tr>
+      <tr><td>A03 Injection</td><td><span class="chip high">High</span></td><td><span class="chip resolved">Resolved</span></td><td><code>H3</code> <code>M1</code></td></tr>
+      <tr><td>A04 Insecure Design</td><td><span class="chip high">High</span></td><td><span class="chip resolved">Resolved</span></td><td><code>C1</code> <code>H1</code> <code>M5</code></td></tr>
+      <tr><td>A05 Security Misconfiguration</td><td><span class="chip medium">Medium</span></td><td><span class="chip accepted">Accepted risk</span></td><td><code>C3</code> <code>M4</code></td></tr>
+      <tr><td>A06 Vulnerable and Outdated Components</td><td><span class="chip high">High</span></td><td><span class="chip resolved">Resolved</span></td><td><code>H2</code></td></tr>
+      <tr><td>A07 Identification and Authentication Failures</td><td><span class="chip high">High</span></td><td><span class="chip resolved">Resolved</span></td><td><code>H4</code> <code>H5</code> <code>M3</code></td></tr>
+      <tr><td>A08 Software and Data Integrity Failures</td><td><span class="chip secure">Clean</span></td><td><span class="chip secure">Clean</span></td><td>No change.</td></tr>
+      <tr><td>A09 Security Logging and Monitoring Failures</td><td><span class="chip low">Low</span></td><td><span class="chip low">Low</span></td><td>Not addressed this pass — no structured audit trail for admin actions yet.</td></tr>
+      <tr><td>A10 Server-Side Request Forgery</td><td><span class="chip secure">Clean</span></td><td><span class="chip secure">Clean</span></td><td>No change.</td></tr>
+    </table>
+  </section>
+
+  <section id="outstanding">
+    <h2>Final Status</h2>
+    <p class="lede">No action items remain. Every fix has been applied, verified, and — where a schema change was involved — confirmed executed against the live database. Nothing left on this list is a gap; the four items below were reviewed and deliberately accepted as risk rather than fixed, each for a stated reason.</p>
+    <div class="resolution" style="margin-top:0">
+      <div class="k">Accepted as risk — noted for the record, not oversights</div>
+      <ul>
+        <li>Old legacy Supabase <code>service_role</code> key remains unrevoked. (C3)</li>
+        <li>Four UAT employees' passwords remain unreset — production will run on an entirely separate, freshly-provisioned user set. (C3)</li>
+        <li>A deactivated user's live session isn't force-revoked, though it can no longer reach any actual data. (M3)</li>
+        <li>Session tokens stay in <code>localStorage</code> rather than an httpOnly cookie — the SDK default, with no active XSS vector found to justify the architectural change. (L2)</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    This is a living document: findings were worked through interactively with the team, with business rules (who should have access to what, and which risks were acceptable to leave as-is) confirmed directly rather than assumed, and fixes verified with actual runtime tests where feasible — round-tripping payloads, simulating attempt sequences, fetching pages directly and inspecting response headers — not just a passing type-check. Two regressions introduced during remediation itself (a CSP blank-page bug, a locale-formatting bug) were caught during that verification and corrected before being reported as done. No dynamic penetration testing was performed against a live deployment; production/Vercel deployment status of this code is outside what can be confirmed from source alone. Original assessment: 2026-07-10. Remediation status current as of 2026-07-12.
+  </footer>
+
+</div>
+</body>
+</html>

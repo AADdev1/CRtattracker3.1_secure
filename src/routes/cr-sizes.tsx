@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
+import { useAppUser } from "@/lib/app-user";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,6 +28,20 @@ export const Route = createFileRoute("/cr-sizes")({
 });
 
 function CrSizesPage() {
+  const { role, isLoading } = useAppUser();
+  const navigate = useNavigate();
+  const canAccess = role === "PMO" || role === "BA" || role === "ITPM";
+
+  useEffect(() => {
+    if (!isLoading && !canAccess) navigate({ to: "/" });
+  }, [isLoading, canAccess, navigate]);
+
+  if (isLoading || !canAccess) return null;
+
+  return <CrSizesView />;
+}
+
+function CrSizesView() {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
