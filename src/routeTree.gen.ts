@@ -17,6 +17,7 @@ import { Route as TestCaseApprovalRouteImport } from './routes/test-case-approva
 import { Route as TatLogicRouteImport } from './routes/tat-logic'
 import { Route as SecurityReportRouteImport } from './routes/security-report'
 import { Route as KpisRouteImport } from './routes/kpis'
+import { Route as DeploymentPlanningRouteImport } from './routes/deployment-planning'
 import { Route as DefectStatusesRouteImport } from './routes/defect-statuses'
 import { Route as CrsRouteImport } from './routes/crs'
 import { Route as CrSizesRouteImport } from './routes/cr-sizes'
@@ -64,6 +65,11 @@ const SecurityReportRoute = SecurityReportRouteImport.update({
 const KpisRoute = KpisRouteImport.update({
   id: '/kpis',
   path: '/kpis',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DeploymentPlanningRoute = DeploymentPlanningRouteImport.update({
+  id: '/deployment-planning',
+  path: '/deployment-planning',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DefectStatusesRoute = DefectStatusesRouteImport.update({
@@ -114,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/cr-sizes': typeof CrSizesRoute
   '/crs': typeof CrsRouteWithChildren
   '/defect-statuses': typeof DefectStatusesRoute
+  '/deployment-planning': typeof DeploymentPlanningRoute
   '/kpis': typeof KpisRoute
   '/security-report': typeof SecurityReportRoute
   '/tat-logic': typeof TatLogicRoute
@@ -132,6 +139,7 @@ export interface FileRoutesByTo {
   '/cr-sizes': typeof CrSizesRoute
   '/crs': typeof CrsRouteWithChildren
   '/defect-statuses': typeof DefectStatusesRoute
+  '/deployment-planning': typeof DeploymentPlanningRoute
   '/kpis': typeof KpisRoute
   '/security-report': typeof SecurityReportRoute
   '/tat-logic': typeof TatLogicRoute
@@ -151,6 +159,7 @@ export interface FileRoutesById {
   '/cr-sizes': typeof CrSizesRoute
   '/crs': typeof CrsRouteWithChildren
   '/defect-statuses': typeof DefectStatusesRoute
+  '/deployment-planning': typeof DeploymentPlanningRoute
   '/kpis': typeof KpisRoute
   '/security-report': typeof SecurityReportRoute
   '/tat-logic': typeof TatLogicRoute
@@ -171,6 +180,7 @@ export interface FileRouteTypes {
     | '/cr-sizes'
     | '/crs'
     | '/defect-statuses'
+    | '/deployment-planning'
     | '/kpis'
     | '/security-report'
     | '/tat-logic'
@@ -189,6 +199,7 @@ export interface FileRouteTypes {
     | '/cr-sizes'
     | '/crs'
     | '/defect-statuses'
+    | '/deployment-planning'
     | '/kpis'
     | '/security-report'
     | '/tat-logic'
@@ -207,6 +218,7 @@ export interface FileRouteTypes {
     | '/cr-sizes'
     | '/crs'
     | '/defect-statuses'
+    | '/deployment-planning'
     | '/kpis'
     | '/security-report'
     | '/tat-logic'
@@ -226,6 +238,7 @@ export interface RootRouteChildren {
   CrSizesRoute: typeof CrSizesRoute
   CrsRoute: typeof CrsRouteWithChildren
   DefectStatusesRoute: typeof DefectStatusesRoute
+  DeploymentPlanningRoute: typeof DeploymentPlanningRoute
   KpisRoute: typeof KpisRoute
   SecurityReportRoute: typeof SecurityReportRoute
   TatLogicRoute: typeof TatLogicRoute
@@ -293,6 +306,13 @@ declare module '@tanstack/react-router' {
       path: '/kpis'
       fullPath: '/kpis'
       preLoaderRoute: typeof KpisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/deployment-planning': {
+      id: '/deployment-planning'
+      path: '/deployment-planning'
+      fullPath: '/deployment-planning'
+      preLoaderRoute: typeof DeploymentPlanningRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/defect-statuses': {
@@ -371,6 +391,7 @@ const rootRouteChildren: RootRouteChildren = {
   CrSizesRoute: CrSizesRoute,
   CrsRoute: CrsRouteWithChildren,
   DefectStatusesRoute: DefectStatusesRoute,
+  DeploymentPlanningRoute: DeploymentPlanningRoute,
   KpisRoute: KpisRoute,
   SecurityReportRoute: SecurityReportRoute,
   TatLogicRoute: TatLogicRoute,

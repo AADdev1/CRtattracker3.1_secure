@@ -5,15 +5,29 @@ import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { Search, ArrowUpDown, ArrowUp, ArrowDown, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { recalculateForCr } from "@/lib/kpi-engine";
@@ -22,6 +36,13 @@ import { getScopedCrs, getScopedDefects } from "@/lib/scoped-data.functions";
 import { getWorkflowStatuses } from "@/lib/workflow-statuses.functions";
 import { updateCrWorkflowStatus } from "@/lib/crs-admin.functions";
 import { getTestCaseCompletionByCr } from "@/lib/test-cases.functions";
+import {
+  getDeploymentInfoByCr,
+  MANUAL_DEPLOYMENT_STAGES,
+  updateDeploymentStage,
+  type DeploymentStage,
+} from "@/lib/deployment.functions";
+import { DeploymentStageBadge } from "@/components/deployment-stage-badge";
 import { useAppUser } from "@/lib/app-user";
 
 export const Route = createFileRoute("/crs")({
@@ -43,7 +64,22 @@ function CrRepository() {
   const [app, setApp] = useState<string>("__all__");
   const [size, setSize] = useState<string>("__all__");
   const [status, setStatus] = useState<string>("__all__");
-  type SortKey = "cr_number" | "date_created" | "date_modified" | "aging_created" | "aging_modified";
+  type SortKey =
+    | "cr_number"
+    | "title"
+    | "application"
+    | "severity"
+    | "workflow_status"
+    | "cr_size"
+    | "date_created"
+    | "date_modified"
+    | "aging_created"
+    | "aging_modified"
+    | "open_defects"
+    | "max_defect_aging"
+    | "tested_pct"
+    | "planned_deployment_date"
+    | "deployment_stage";
   const [sortKey, setSortKey] = useState<SortKey>("date_modified");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const qc = useQueryClient();
@@ -71,6 +107,16 @@ function CrRepository() {
     },
     onError: (e: unknown) =>
       toast.error(e instanceof Error ? e.message : "Failed to update status"),
+  });
+
+  const updateStage = useMutation({
+    mutationFn: (v: { crNumber: string; stage: DeploymentStage }) =>
+      updateDeploymentStage({ data: v }),
+    onSuccess: () => {
+      toast.success("Deployment stage updated");
+      qc.invalidateQueries({ queryKey: ["deployment-info-by-cr"] });
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : String(e)),
   });
 
   const crs = useQuery({
@@ -107,6 +153,14 @@ function CrRepository() {
     },
   });
 
+  const deploymentInfo = useQuery({
+    queryKey: ["deployment-info-by-cr"],
+    queryFn: async () => {
+      const rows = await getDeploymentInfoByCr();
+      return new Map(rows.map((r) => [r.cr_number, r]));
+    },
+  });
+
   const apps = useMemo(() => {
     const s = new Set<string>();
     (crs.data ?? []).forEach((c) => c.application && s.add(c.application));
@@ -129,37 +183,56 @@ function CrRepository() {
     if (status !== "__all__" && c.workflow_status !== status) return false;
     if (q) {
       const t = q.toLowerCase();
-      if (
-        !c.cr_number.toLowerCase().includes(t) &&
-        !(c.title ?? "").toLowerCase().includes(t)
-      )
+      if (!c.cr_number.toLowerCase().includes(t) && !(c.title ?? "").toLowerCase().includes(t))
         return false;
     }
     return true;
   });
 
+  function getSortValue(c: (typeof filtered)[number], key: SortKey): string | number | null {
+    switch (key) {
+      case "cr_number":
+        return c.cr_number;
+      case "title":
+        return c.title;
+      case "application":
+        return c.application;
+      case "severity":
+        return c.severity;
+      case "workflow_status":
+        return c.workflow_status;
+      case "cr_size":
+        return c.cr_size;
+      case "date_created":
+        return c.date_created ? new Date(c.date_created).getTime() : null;
+      case "date_modified":
+        return c.date_modified ? new Date(c.date_modified).getTime() : null;
+      case "aging_created":
+        return ageDays(c.date_created);
+      case "aging_modified":
+        return ageDays(c.date_modified);
+      case "open_defects":
+        return defectStats.data?.get(c.cr_number)?.openCount ?? 0;
+      case "max_defect_aging":
+        return defectStats.data?.get(c.cr_number)?.maxAgingDays ?? null;
+      case "tested_pct": {
+        const tc = testCaseCompletion.data?.get(c.cr_number);
+        if (!tc || tc.testCaseCount === 0) return null;
+        return tc.testedCount / tc.testCaseCount;
+      }
+      case "planned_deployment_date": {
+        const d = deploymentInfo.data?.get(c.cr_number)?.planned_deployment_date;
+        return d ? new Date(d).getTime() : null;
+      }
+      case "deployment_stage":
+        return deploymentInfo.data?.get(c.cr_number)?.deployment_stage ?? null;
+    }
+  }
+
   const sorted = [...filtered].sort((a, b) => {
     const dir = sortDir === "asc" ? 1 : -1;
-    const av =
-      sortKey === "cr_number"
-        ? a.cr_number
-        : sortKey === "date_created" || sortKey === "aging_created"
-        ? a.date_created
-          ? new Date(a.date_created).getTime()
-          : null
-        : a.date_modified
-        ? new Date(a.date_modified).getTime()
-        : null;
-    const bv =
-      sortKey === "cr_number"
-        ? b.cr_number
-        : sortKey === "date_created" || sortKey === "aging_created"
-        ? b.date_created
-          ? new Date(b.date_created).getTime()
-          : null
-        : b.date_modified
-        ? new Date(b.date_modified).getTime()
-        : null;
+    const av = getSortValue(a, sortKey);
+    const bv = getSortValue(b, sortKey);
     if (av == null && bv == null) return 0;
     if (av == null) return 1;
     if (bv == null) return -1;
@@ -183,8 +256,7 @@ function CrRepository() {
     ) : (
       <ArrowDown className="size-3 inline ml-1" />
     );
-  const fmt = (d: string | null) =>
-    d ? new Date(d).toLocaleDateString() : "—";
+  const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString() : "—");
   const testingPct = (crNumber: string) => {
     const tc = testCaseCompletion.data?.get(crNumber);
     if (!tc || tc.testCaseCount === 0) return "—";
@@ -210,14 +282,22 @@ function CrRepository() {
               />
             </div>
             <Select value={app} onValueChange={setApp}>
-              <SelectTrigger className="w-48"><SelectValue placeholder="Application" /></SelectTrigger>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Application" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">All applications</SelectItem>
-                {apps.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                {apps.map((a) => (
+                  <SelectItem key={a} value={a}>
+                    {a}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={size} onValueChange={setSize}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="Size" /></SelectTrigger>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Size" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">All sizes</SelectItem>
                 <SelectItem value="Small">Small</SelectItem>
@@ -226,10 +306,16 @@ function CrRepository() {
               </SelectContent>
             </Select>
             <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger className="w-64"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">All statuses</SelectItem>
-                {statuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {statuses.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </CardContent>
@@ -240,29 +326,111 @@ function CrRepository() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("cr_number")}>
-                    CR Number<SortIcon k="cr_number" />
+                  <TableHead
+                    className="cursor-pointer select-none sticky left-0 z-20 w-[110px] min-w-[110px] bg-card"
+                    onClick={() => toggleSort("cr_number")}
+                  >
+                    CR Number
+                    <SortIcon k="cr_number" />
                   </TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Application</TableHead>
-                  <TableHead>Severity</TableHead>
-                  <TableHead>Current Status</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("date_created")}>
-                    Created On<SortIcon k="date_created" />
+                  <TableHead
+                    className="cursor-pointer select-none sticky left-[110px] z-20 w-[220px] min-w-[220px] bg-card border-r"
+                    onClick={() => toggleSort("title")}
+                  >
+                    Title
+                    <SortIcon k="title" />
                   </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("date_modified")}>
-                    Last Modified<SortIcon k="date_modified" />
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleSort("application")}
+                  >
+                    Application
+                    <SortIcon k="application" />
                   </TableHead>
-                  <TableHead className="cursor-pointer select-none text-right" onClick={() => toggleSort("aging_created")}>
-                    Age (Created)<SortIcon k="aging_created" />
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleSort("severity")}
+                  >
+                    Severity
+                    <SortIcon k="severity" />
                   </TableHead>
-                  <TableHead className="cursor-pointer select-none text-right" onClick={() => toggleSort("aging_modified")}>
-                    Age (Modified)<SortIcon k="aging_modified" />
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleSort("workflow_status")}
+                  >
+                    Current Status
+                    <SortIcon k="workflow_status" />
                   </TableHead>
-                  <TableHead className="text-right">Open Defects</TableHead>
-                  <TableHead className="text-right">Max Defect Aging</TableHead>
-                  <TableHead className="w-32 text-right">Tested</TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleSort("cr_size")}
+                  >
+                    Size
+                    <SortIcon k="cr_size" />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleSort("date_created")}
+                  >
+                    Created On
+                    <SortIcon k="date_created" />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleSort("date_modified")}
+                  >
+                    Last Modified
+                    <SortIcon k="date_modified" />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none text-right"
+                    onClick={() => toggleSort("aging_created")}
+                  >
+                    Age (Created)
+                    <SortIcon k="aging_created" />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none text-right"
+                    onClick={() => toggleSort("aging_modified")}
+                  >
+                    Age (Modified)
+                    <SortIcon k="aging_modified" />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none text-right"
+                    onClick={() => toggleSort("open_defects")}
+                  >
+                    Open Defects
+                    <SortIcon k="open_defects" />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none text-right"
+                    onClick={() => toggleSort("max_defect_aging")}
+                  >
+                    Max Defect Aging
+                    <SortIcon k="max_defect_aging" />
+                  </TableHead>
+                  <TableHead
+                    className="w-32 cursor-pointer select-none text-right"
+                    onClick={() => toggleSort("tested_pct")}
+                  >
+                    Tested
+                    <SortIcon k="tested_pct" />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleSort("planned_deployment_date")}
+                  >
+                    Planned Deployment Date
+                    <SortIcon k="planned_deployment_date" />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleSort("deployment_stage")}
+                  >
+                    Deployment Stage
+                    <SortIcon k="deployment_stage" />
+                  </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -271,52 +439,112 @@ function CrRepository() {
                   const ac = ageDays(c.date_created);
                   const am = ageDays(c.date_modified);
                   const ds = defectStats.data?.get(c.cr_number);
+                  const dep = deploymentInfo.data?.get(c.cr_number);
+                  // Trust workflow_status as a safety net — a CR can reach these
+                  // CMS-reported terminal statuses from CSV import before/without
+                  // deployment_stage having been separately synced to match.
+                  const isDeployedToProduction =
+                    dep?.deployment_stage === "Deployed to Production" ||
+                    c.workflow_status === "28_Deployed in Production" ||
+                    c.workflow_status === "29_Live and Closed";
                   return (
-                  <TableRow key={c.cr_number}>
-                    <TableCell>
-                      <Link
-                        to="/crs/$crNumber"
-                        params={{ crNumber: c.cr_number }}
-                        className="text-primary hover:underline font-medium"
-                      >
-                        {c.cr_number}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="max-w-md truncate">{c.title}</TableCell>
-                    <TableCell>{c.application}</TableCell>
-                    <TableCell>{c.severity}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{c.workflow_status}</TableCell>
-                    <TableCell>{c.cr_size ?? <span className="text-muted-foreground italic">unset</span>}</TableCell>
-                    <TableCell className="text-xs">{fmt(c.date_created)}</TableCell>
-                    <TableCell className="text-xs">{fmt(c.date_modified)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{ac == null ? "—" : `${ac}d`}</TableCell>
-                    <TableCell className="text-right tabular-nums">{am == null ? "—" : `${am}d`}</TableCell>
-                    <TableCell className="text-right tabular-nums">{ds?.openCount ?? 0}</TableCell>
-                    <TableCell className="text-right tabular-nums">{ds?.maxAgingDays != null ? `${ds.maxAgingDays}d` : "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {testingPct(c.cr_number)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {canEditStatus && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditing({ crNumber: c.cr_number, current: c.workflow_status });
-                            const match = (wfStatuses.data ?? []).find((w) => w.label === c.workflow_status);
-                            setNewStatusCode(match?.code ?? "");
-                          }}
+                    <TableRow key={c.cr_number}>
+                      <TableCell className="sticky left-0 z-10 w-[110px] min-w-[110px] bg-card">
+                        <Link
+                          to="/crs/$crNumber"
+                          params={{ crNumber: c.cr_number }}
+                          className="text-primary hover:underline font-medium"
                         >
-                          <Pencil className="size-3.5 mr-1" /> Update Status
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
+                          {c.cr_number}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="sticky left-[110px] z-10 w-[220px] min-w-[220px] bg-card border-r truncate">
+                        {c.title}
+                      </TableCell>
+                      <TableCell>{c.application}</TableCell>
+                      <TableCell>{c.severity}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {c.workflow_status}
+                      </TableCell>
+                      <TableCell>
+                        {c.cr_size ?? <span className="text-muted-foreground italic">unset</span>}
+                      </TableCell>
+                      <TableCell className="text-xs">{fmt(c.date_created)}</TableCell>
+                      <TableCell className="text-xs">{fmt(c.date_modified)}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {ac == null ? "—" : `${ac}d`}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {am == null ? "—" : `${am}d`}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {ds?.openCount ?? 0}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {ds?.maxAgingDays != null ? `${ds.maxAgingDays}d` : "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {testingPct(c.cr_number)}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {dep?.planned_deployment_date ? fmt(dep.planned_deployment_date) : "—"}
+                      </TableCell>
+                      <TableCell>
+                        {isDeployedToProduction ? (
+                          <DeploymentStageBadge stage="Deployed to Production" />
+                        ) : canEditStatus &&
+                          dep?.planned_deployment_date &&
+                          dep?.deployment_stage ? (
+                          <Select
+                            value={dep.deployment_stage}
+                            onValueChange={(v) =>
+                              updateStage.mutate({
+                                crNumber: c.cr_number,
+                                stage: v as DeploymentStage,
+                              })
+                            }
+                          >
+                            <SelectTrigger className="w-44 h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="UAT Signed Off" disabled>
+                                UAT Signed Off
+                              </SelectItem>
+                              {MANUAL_DEPLOYMENT_STAGES.map((stage) => (
+                                <SelectItem key={stage} value={stage}>
+                                  {stage}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <DeploymentStageBadge stage={dep?.deployment_stage ?? null} />
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {canEditStatus && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditing({ crNumber: c.cr_number, current: c.workflow_status });
+                              const match = (wfStatuses.data ?? []).find(
+                                (w) => w.label === c.workflow_status,
+                              );
+                              setNewStatusCode(match?.code ?? "");
+                            }}
+                          >
+                            <Pencil className="size-3.5 mr-1" /> Update Status
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
                 {sorted.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={14} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={16} className="text-center py-12 text-muted-foreground">
                       No CRs match your filters.
                     </TableCell>
                   </TableRow>
@@ -327,30 +555,53 @@ function CrRepository() {
         </Card>
       </PageBody>
 
-      <Dialog open={!!editing} onOpenChange={(o) => { if (!o) { setEditing(null); setNewStatusCode(""); } }}>
+      <Dialog
+        open={!!editing}
+        onOpenChange={(o) => {
+          if (!o) {
+            setEditing(null);
+            setNewStatusCode("");
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Update CR Status</DialogTitle>
             <DialogDescription>
-              {editing?.crNumber} — current: <span className="font-medium">{editing?.current ?? "—"}</span>.
-              The selected status will be timestamped with the current date &amp; time, and KPIs will be recalculated.
+              {editing?.crNumber} — current:{" "}
+              <span className="font-medium">{editing?.current ?? "—"}</span>. The selected status
+              will be timestamped with the current date &amp; time, and KPIs will be recalculated.
             </DialogDescription>
           </DialogHeader>
           <div className="py-2">
             <Select value={newStatusCode} onValueChange={setNewStatusCode}>
-              <SelectTrigger><SelectValue placeholder="Select new status" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Select new status" />
+              </SelectTrigger>
               <SelectContent>
                 {(wfStatuses.data ?? []).map((s) => (
-                  <SelectItem key={s.code} value={s.code}>{s.label}</SelectItem>
+                  <SelectItem key={s.code} value={s.code}>
+                    {s.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditing(null); setNewStatusCode(""); }}>Cancel</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditing(null);
+                setNewStatusCode("");
+              }}
+            >
+              Cancel
+            </Button>
             <Button
               disabled={!newStatusCode || updateStatus.isPending}
-              onClick={() => editing && updateStatus.mutate({ crNumber: editing.crNumber, code: newStatusCode })}
+              onClick={() =>
+                editing && updateStatus.mutate({ crNumber: editing.crNumber, code: newStatusCode })
+              }
             >
               {updateStatus.isPending ? "Saving…" : "Save"}
             </Button>

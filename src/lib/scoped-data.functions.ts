@@ -1,7 +1,12 @@
 // Server-side scoping for CRs/KPI results/defects by BA/ITPM name match.
 // A CR is visible to the logged-in user when their user_management.user_name
-// exactly equals crs.ba and/or crs.itpm. Admins (user_management.is_admin)
-// bypass this entirely and see every CR/KPI/defect unfiltered.
+// exactly equals crs.ba and/or crs.itpm, OR when the CR's application is in
+// their user_management.spoc_applications (same SPOC broadening
+// test-cases.functions.ts already grants for approval rights — a PMO
+// covering an application without being personally listed as its BA/ITPM
+// gets full visibility into every CR under that application). Admins
+// (user_management.is_admin) bypass this entirely and see every CR/KPI/
+// defect unfiltered.
 //
 // Uses the service-role client (RLS is locked down on these tables — see
 // supabase/migrations/20260703000000_lock_down_rls.sql), loaded dynamically
@@ -20,10 +25,18 @@ interface ScopedInput {
   crNumber?: string;
 }
 
-function relationFor(row: { ba: string | null; itpm: string | null }, userName: string): CrRelation | null {
+// A SPOC match grants "both" — the same full-visibility relation a
+// BA+ITPM-on-the-same-CR gets — since a SPOC's role in that application
+// isn't specifically BA or ITPM, it's oversight of everything.
+function relationFor(
+  row: { ba: string | null; itpm: string | null; application: string | null },
+  userName: string,
+  spocApplications: string[],
+): CrRelation | null {
   const isBa = row.ba === userName;
   const isItpm = row.itpm === userName;
-  if (isBa && isItpm) return "both";
+  const isSpoc = !!row.application && spocApplications.includes(row.application);
+  if ((isBa && isItpm) || isSpoc) return "both";
   if (isBa) return "ba";
   if (isItpm) return "itpm";
   return null;
@@ -33,11 +46,12 @@ async function loadScopedCrs(
   db: SupabaseClient<Database>,
   userName: string,
   isAdmin: boolean,
+  spocApplications: string[],
   crNumber?: string,
 ) {
   const columns = crNumber
     ? "*"
-    : "cr_number, title, application, severity, workflow_status, cr_size, date_created, date_modified, ba, itpm, testing_percentage";
+    : "cr_number, title, application, severity, workflow_status, cr_size, date_created, date_modified, ba, itpm, testing_percentage, deployment_stage";
   let query = db.from("crs").select(columns);
   if (crNumber) query = query.eq("cr_number", crNumber);
   const { data, error } = await query;
@@ -45,7 +59,9 @@ async function loadScopedCrs(
   return (data ?? [])
     .map((row) => ({
       row: row as unknown as CrRow,
-      relation: isAdmin ? ("admin" as const) : relationFor(row as unknown as CrRow, userName),
+      relation: isAdmin
+        ? ("admin" as const)
+        : relationFor(row as unknown as CrRow, userName, spocApplications),
     }))
     .filter((x): x is { row: CrRow; relation: CrRelation } => x.relation !== null);
 }
@@ -53,9 +69,15 @@ async function loadScopedCrs(
 export const getScopedCrs = createServerFn({ method: "GET" })
   .inputValidator((data: ScopedInput | undefined) => data ?? {})
   .handler(async ({ data }) => {
-    const { userName, isAdmin } = await requireSessionUser();
+    const { userName, isAdmin, spocApplications } = await requireSessionUser();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const scoped = await loadScopedCrs(supabaseAdmin, userName, isAdmin, data.crNumber);
+    const scoped = await loadScopedCrs(
+      supabaseAdmin,
+      userName,
+      isAdmin,
+      spocApplications,
+      data.crNumber,
+    );
     if (data.crNumber) {
       const only = scoped[0];
       return only ? { ...only.row, relation: only.relation } : null;
@@ -74,9 +96,15 @@ function roleAllowedForRelation(role: string | undefined, relation: CrRelation):
 export const getScopedKpiResults = createServerFn({ method: "GET" })
   .inputValidator((data: ScopedInput | undefined) => data ?? {})
   .handler(async ({ data }) => {
-    const { userName, isAdmin } = await requireSessionUser();
+    const { userName, isAdmin, spocApplications } = await requireSessionUser();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const scoped = await loadScopedCrs(supabaseAdmin, userName, isAdmin, data.crNumber);
+    const scoped = await loadScopedCrs(
+      supabaseAdmin,
+      userName,
+      isAdmin,
+      spocApplications,
+      data.crNumber,
+    );
     if (scoped.length === 0) return [];
     const crMap = new Map(scoped.map((s) => [s.row.cr_number, s]));
     const { data: results, error } = await supabaseAdmin
@@ -94,7 +122,12 @@ export const getScopedKpiResults = createServerFn({ method: "GET" })
         return {
           ...r,
           relation: c.relation,
-          crs: { application: c.row.application, cr_size: c.row.cr_size, ba: c.row.ba, itpm: c.row.itpm },
+          crs: {
+            application: c.row.application,
+            cr_size: c.row.cr_size,
+            ba: c.row.ba,
+            itpm: c.row.itpm,
+          },
         };
       });
   });
@@ -102,12 +135,20 @@ export const getScopedKpiResults = createServerFn({ method: "GET" })
 export const getScopedDefects = createServerFn({ method: "GET" })
   .inputValidator((data: ScopedInput | undefined) => data ?? {})
   .handler(async ({ data }) => {
-    const { userName, isAdmin } = await requireSessionUser();
+    const { userName, isAdmin, spocApplications } = await requireSessionUser();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const scoped = await loadScopedCrs(supabaseAdmin, userName, isAdmin, data.crNumber);
+    const scoped = await loadScopedCrs(
+      supabaseAdmin,
+      userName,
+      isAdmin,
+      spocApplications,
+      data.crNumber,
+    );
     // Admins see every defect, not just open ones; everyone else only sees
     // open defects on CRs where they're the ITPM (or BA+ITPM).
-    const visible = isAdmin ? scoped : scoped.filter((s) => s.relation === "itpm" || s.relation === "both");
+    const visible = isAdmin
+      ? scoped
+      : scoped.filter((s) => s.relation === "itpm" || s.relation === "both");
     if (visible.length === 0) return [];
     const crNumbers = visible.map((s) => s.row.cr_number);
     const [{ data: defects, error: dErr }, { data: mapping, error: mErr }] = await Promise.all([

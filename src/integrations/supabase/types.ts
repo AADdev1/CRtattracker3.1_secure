@@ -30,6 +30,9 @@ export type Database = {
           date_created: string | null
           date_modified: string | null
           department: string | null
+          deployment_date: string | null
+          deployment_remarks: string | null
+          deployment_stage: Database["public"]["Enums"]["deployment_stage"] | null
           expected_go_live_date: string | null
           hod: string | null
           is_dropped: boolean
@@ -115,6 +118,9 @@ export type Database = {
           date_created?: string | null
           date_modified?: string | null
           department?: string | null
+          deployment_date?: string | null
+          deployment_remarks?: string | null
+          deployment_stage?: Database["public"]["Enums"]["deployment_stage"] | null
           expected_go_live_date?: string | null
           hod?: string | null
           is_dropped?: boolean
@@ -200,6 +206,9 @@ export type Database = {
           date_created?: string | null
           date_modified?: string | null
           department?: string | null
+          deployment_date?: string | null
+          deployment_remarks?: string | null
+          deployment_stage?: Database["public"]["Enums"]["deployment_stage"] | null
           expected_go_live_date?: string | null
           hod?: string | null
           is_dropped?: boolean
@@ -369,6 +378,90 @@ export type Database = {
             referencedColumns: ["cr_number"]
           },
         ]
+      }
+      deployment_audit_log: {
+        Row: {
+          created_at: string
+          cr_number: string | null
+          deployment_schedule_id: string | null
+          event_type: string
+          id: string
+          new_value: Json | null
+          old_value: Json | null
+          performed_by: string
+        }
+        Insert: {
+          created_at?: string
+          cr_number?: string | null
+          deployment_schedule_id?: string | null
+          event_type: string
+          id?: string
+          new_value?: Json | null
+          old_value?: Json | null
+          performed_by: string
+        }
+        Update: {
+          created_at?: string
+          cr_number?: string | null
+          deployment_schedule_id?: string | null
+          event_type?: string
+          id?: string
+          new_value?: Json | null
+          old_value?: Json | null
+          performed_by?: string
+        }
+        Relationships: []
+      }
+      deployment_name_seq: {
+        Row: {
+          last_seq: number
+          year: number
+        }
+        Insert: {
+          last_seq?: number
+          year: number
+        }
+        Update: {
+          last_seq?: number
+          year?: number
+        }
+        Relationships: []
+      }
+      deployment_schedule: {
+        Row: {
+          application: string
+          created_at: string
+          created_by: string
+          deployment_date: string
+          deployment_name: string
+          id: string
+          remarks: string | null
+          status: Database["public"]["Enums"]["deployment_status"]
+          updated_at: string
+        }
+        Insert: {
+          application: string
+          created_at?: string
+          created_by: string
+          deployment_date: string
+          deployment_name: string
+          id?: string
+          remarks?: string | null
+          status?: Database["public"]["Enums"]["deployment_status"]
+          updated_at?: string
+        }
+        Update: {
+          application?: string
+          created_at?: string
+          created_by?: string
+          deployment_date?: string
+          deployment_name?: string
+          id?: string
+          remarks?: string | null
+          status?: Database["public"]["Enums"]["deployment_status"]
+          updated_at?: string
+        }
+        Relationships: []
       }
       kpi_excluded_statuses: {
         Row: {
@@ -728,6 +821,14 @@ export type Database = {
     }
     Enums: {
       cr_size: "Small" | "Medium" | "Large"
+      deployment_stage:
+        | "UAT Signed Off"
+        | "Code Merging Done"
+        | "Deployed to MO"
+        | "MO Testing Done"
+        | "MO Signed Off"
+        | "Deployed to Production"
+      deployment_status: "Planned" | "Completed" | "Cancelled"
       kpi_role: "ITPM" | "BA"
       kpi_status: "pending" | "not_started" | "green" | "amber" | "red"
       staff_role: "BA" | "ITPM" | "PMO" | "Tester"
@@ -861,6 +962,15 @@ export const Constants = {
   public: {
     Enums: {
       cr_size: ["Small", "Medium", "Large"],
+      deployment_stage: [
+        "UAT Signed Off",
+        "Code Merging Done",
+        "Deployed to MO",
+        "MO Testing Done",
+        "MO Signed Off",
+        "Deployed to Production",
+      ],
+      deployment_status: ["Planned", "Completed", "Cancelled"],
       kpi_role: ["ITPM", "BA"],
       kpi_status: ["pending", "not_started", "green", "amber", "red"],
       staff_role: ["BA", "ITPM", "PMO", "Tester"],

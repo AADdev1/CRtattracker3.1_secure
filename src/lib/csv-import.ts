@@ -11,6 +11,7 @@ import Papa from "papaparse";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSessionUser } from "@/lib/gate.functions";
 import { assertFileSizeOk, assertRowCountOk } from "@/lib/upload-limits";
+import { syncDeploymentStagesForCrs } from "@/lib/deployment.functions";
 
 // Map from CSV header → DB column name.
 // Status columns are populated dynamically from workflow_statuses table.
@@ -98,7 +99,7 @@ export interface CsvImportResult {
 const importCrRows = createServerFn({ method: "POST" })
   .inputValidator((data: { rows: Record<string, string>[] }) => data)
   .handler(async ({ data: { rows } }): Promise<CsvImportResult> => {
-    const { isAdmin, role } = await requireSessionUser();
+    const { isAdmin, role, userName } = await requireSessionUser();
     if (!isAdmin && role !== "PMO" && role !== "BA" && role !== "ITPM") {
       throw new Error("Forbidden: only Admin, PMO, BA, or ITPM can import CR data");
     }
@@ -196,6 +197,16 @@ const importCrRows = createServerFn({ method: "POST" })
         .from("crs")
         .upsert(chunk, { onConflict: "cr_number" });
       if (error) errors.push(error.message);
+    }
+
+    // Deployment Management (Phase 4): UAT Signed Off / Deployed to
+    // Production are CMS-driven deployment stages — sync them from
+    // whatever s24_uat_signed_off / s28_* timestamps this import just
+    // wrote, same reconciliation-pass shape importDefectRows already uses
+    // in defect-import.ts.
+    const importedCrNumbers = upsertRows.map((r) => r.cr_number as string);
+    if (importedCrNumbers.length > 0) {
+      await syncDeploymentStagesForCrs(supabaseAdmin, importedCrNumbers, userName);
     }
 
     return { totalRows: rows.length, inserted, updated, skipped, errors };

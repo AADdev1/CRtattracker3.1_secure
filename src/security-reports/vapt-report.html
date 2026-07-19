@@ -224,23 +224,23 @@
   <div class="cover">
     <div class="eyebrow"><span class="dot"></span> Confidential — Application Security Assessment · Remediation Status</div>
     <h1>Kpisavvy CR/KPI Tracker<br>Source Code VAPT Report</h1>
-    <p class="sub">Full white-box review of the React + TanStack Start + Supabase/Postgres application, updated to reflect remediation work completed since the original assessment. 13 of 16 findings are fixed and verified, with every associated database migration executed against the live project; 3 were explicitly reviewed and accepted as risk rather than fixed.</p>
+    <p class="sub">Full white-box review of the React + TanStack Start + Supabase/Postgres application, updated to reflect remediation work completed since the original assessment, plus a targeted V4.1 scan of the new Deployment Management module. 13 of 19 findings are fixed and verified, with every associated database migration executed against the live project; 6 were explicitly reviewed and accepted as risk rather than fixed.</p>
     <div class="cover-meta">
       <div><span class="k">Scope</span><span class="v">Full repository, working tree</span></div>
       <div><span class="k">Method</span><span class="v">Static review + targeted runtime tests</span></div>
       <div><span class="k">Original assessment</span><span class="v">2026-07-10</span></div>
-      <div><span class="k">Remediation status as of</span><span class="v">2026-07-12</span></div>
+      <div><span class="k">V4.1 scan / current as of</span><span class="v">2026-07-19</span></div>
     </div>
   </div>
 
   <section id="summary">
     <h2>Remediation Summary</h2>
-    <p class="lede">Every finding from the original assessment was worked through with the team, one at a time — explained, scoped against real business rules (who should actually be allowed to do what), fixed, verified with an actual runtime test rather than just a type-check, and every associated database migration confirmed run against the live project. Three were deliberately reviewed and accepted as risk rather than fixed, each for a stated, specific reason.</p>
+    <p class="lede">Every finding from the original assessment was worked through with the team, one at a time — explained, scoped against real business rules (who should actually be allowed to do what), fixed, verified with an actual runtime test rather than just a type-check, and every associated database migration confirmed run against the live project. A follow-up <b>V4.1 scan</b> targeted the new Deployment Management module (deployment schedules, CR assignment, stage/status cascades) added since the original assessment; its three findings (H6, M6, M7) were reviewed and accepted as risk rather than fixed, for the reasons stated on each. Six findings total are now accepted risk, each for a stated, specific reason.</p>
 
     <div class="stats">
       <div class="stat resolved"><b>13</b><span>Fixed &amp; verified</span></div>
       <div class="stat pending"><b>0</b><span>Action pending</span></div>
-      <div class="stat accepted"><b>3</b><span>Accepted risk</span></div>
+      <div class="stat accepted"><b>6</b><span>Accepted risk</span></div>
       <div class="stat secure"><b>10</b><span>Verified secure</span></div>
     </div>
 
@@ -254,11 +254,14 @@
       <tr><td class="mono">H3</td><td><a href="#h3">Formula/CSV injection in exported test-case workbook</a></td><td><span class="chip high">High</span></td><td><span class="chip resolved">Resolved</span></td></tr>
       <tr><td class="mono">H4</td><td><a href="#h4">No password-strength policy on account creation</a></td><td><span class="chip high">High</span></td><td><span class="chip resolved">Resolved (N/A)</span></td></tr>
       <tr><td class="mono">H5</td><td><a href="#h5">No brute-force / rate-limit protection on login</a></td><td><span class="chip high">High</span></td><td><span class="chip resolved">Resolved</span></td></tr>
+      <tr><td class="mono">H6</td><td><a href="#h6">V4.1 — Deployment completion cascades across applications with no ownership check</a></td><td><span class="chip high">High</span></td><td><span class="chip accepted">Accepted risk</span></td></tr>
       <tr><td class="mono">M1</td><td><a href="#m1">Mass-assignment via client-controlled column name</a></td><td><span class="chip medium">Medium</span></td><td><span class="chip resolved">Resolved</span></td></tr>
       <tr><td class="mono">M2</td><td><a href="#m2">Horizontal privilege gap on approver comments</a></td><td><span class="chip medium">Medium</span></td><td><span class="chip resolved">Resolved</span></td></tr>
       <tr><td class="mono">M3</td><td><a href="#m3">Deactivated users keep a live JWT until expiry</a></td><td><span class="chip medium">Medium</span></td><td><span class="chip accepted">Accepted risk</span></td></tr>
       <tr><td class="mono">M4</td><td><a href="#m4">No security response headers configured</a></td><td><span class="chip medium">Medium</span></td><td><span class="chip resolved">Resolved</span></td></tr>
       <tr><td class="mono">M5</td><td><a href="#m5">No size/row limits on CSV/Excel uploads</a></td><td><span class="chip medium">Medium</span></td><td><span class="chip resolved">Resolved</span></td></tr>
+      <tr><td class="mono">M6</td><td><a href="#m6">V4.1 — Any PMO/ITPM/BA can reschedule or cancel any deployment schedule</a></td><td><span class="chip medium">Medium</span></td><td><span class="chip accepted">Accepted risk</span></td></tr>
+      <tr><td class="mono">M7</td><td><a href="#m7">V4.1 — Deployment CR details readable with no role or ownership check</a></td><td><span class="chip medium">Medium</span></td><td><span class="chip accepted">Accepted risk</span></td></tr>
       <tr><td class="mono">L1</td><td><a href="#l1">CR/test-case data unscoped across all authenticated roles</a></td><td><span class="chip low">Low</span></td><td><span class="chip resolved">Resolved</span></td></tr>
       <tr><td class="mono">L2</td><td><a href="#l2">Session tokens kept in localStorage</a></td><td><span class="chip low">Low</span></td><td><span class="chip accepted">Accepted risk</span></td></tr>
       <tr><td class="mono">L3</td><td><a href="#l3">Dead credential material still present in .env</a></td><td><span class="chip low">Low</span></td><td><span class="chip resolved">Resolved</span></td></tr>
@@ -360,7 +363,7 @@
   </section>
 
   <section id="high-findings">
-    <h2>High Findings <span class="count">5</span></h2>
+    <h2>High Findings <span class="count">6</span></h2>
 
     <article class="finding" data-sev="high" data-status="resolved" id="h1">
       <div class="finding-head">
@@ -423,10 +426,23 @@
         <p><b>Scope, stated plainly:</b> this protects traffic through your own login form. It cannot stop someone who calls Supabase's own auth endpoint directly with the public key, bypassing the app entirely — that gap is closed only by Supabase's own platform-level rate limiting (dashboard) and, if desired later, CAPTCHA.</p>
       </div>
     </article>
+
+    <article class="finding" data-sev="high" data-status="accepted" id="h6">
+      <div class="finding-head">
+        <h3>V4.1 — Deployment completion cascades across applications with no ownership check <span class="finding-id">H6</span></h3>
+        <div class="chip-row"><span class="chip high">High</span><span class="chip accepted">Accepted risk</span></div>
+      </div>
+      <div class="loc"><b>deployment.functions.ts</b> — <code>markDeploymentScheduleCompleted</code>, <code>listPlannedSchedules</code></div>
+      <div class="resolution">
+        <div class="k">Status — accepted, by explicit decision (V4.1 scan)</div>
+        <p><code>markDeploymentScheduleCompleted</code> checks only that the caller's role is PMO/ITPM/BA, not that they're associated with the schedule's application. <code>listPlannedSchedules</code> hands every Planned schedule's ID/application/date to any authenticated PMO/ITPM/BA with no filtering, so the ID needed isn't guessed — it's returned directly by the app's own "Assign to Deployment" picker. A BA working only on Application A can complete Application B's schedule, cascading <code>deployment_stage</code>/<code>workflow_status</code>/<code>s28_deployed_in_production</code> changes and a KPI recalculation onto every CR on it.</p>
+        <p>Reviewed against the trust model this app already established (see H1): PMO/ITPM/BA are treated as one internal deployment-operations pool, not segmented by application as a hard security boundary — the same precedent already accepted for direct CR-field edits (<code>updateCrWorkflowStatus</code>, <code>updateCrSizeAndNotes</code> in <code>crs-admin.functions.ts</code>, which permit any PMO/BA/ITPM to edit any CR regardless of assignment). The per-CR ownership check on <code>assignCrsToDeployment</code> limits which CRs get pulled into a schedule in the first place; once a schedule exists, this is consistent with that same internal-trust model, not a bypass of it. Left unrestricted by explicit decision rather than adding per-application scoping, which would be a real behavior change to who can operate on shared deployment records.</p>
+      </div>
+    </article>
   </section>
 
   <section id="medium-findings">
-    <h2>Medium Findings <span class="count">5</span></h2>
+    <h2>Medium Findings <span class="count">7</span></h2>
 
     <article class="finding" data-sev="medium" data-status="resolved" id="m1">
       <div class="finding-head">
@@ -487,6 +503,32 @@
       <div class="resolution">
         <div class="k">Resolution</div>
         <p>New shared <code>upload-limits.ts</code> enforces a 10MB file-size ceiling client-side, before parsing starts, and a 10,000-row ceiling server-side, before the upsert loop starts — across all three upload paths (CR CSV, Defect CSV, Test Case Excel). Boundary-tested directly: 9.9MB/9,999 rows pass, 10.1MB/10,001 rows reject with a clear message. A locale-formatting bug in the error message (numbers rendering as <code>20,00,000</code> instead of <code>2,000,000</code> depending on the server's default locale) was caught during that verification and fixed by pinning <code>en-US</code> explicitly.</p>
+      </div>
+    </article>
+
+    <article class="finding" data-sev="medium" data-status="accepted" id="m6">
+      <div class="finding-head">
+        <h3>V4.1 — Any PMO/ITPM/BA can reschedule or cancel any deployment schedule <span class="finding-id">M6</span></h3>
+        <div class="chip-row"><span class="chip medium">Medium</span><span class="chip accepted">Accepted risk</span></div>
+      </div>
+      <div class="loc"><b>deployment.functions.ts</b> — <code>updateDeploymentSchedule</code></div>
+      <div class="resolution">
+        <div class="k">Status — accepted, by explicit decision (V4.1 scan)</div>
+        <p>Gated by role only, with no check that the caller created the schedule or owns a CR on it. A successful call can cancel a schedule or move its date — the latter cascades the new <code>deployment_date</code> onto every CR currently matched to it, again without an ownership check on those CRs. The schedule ID is obtained the same legitimate way as H6: via <code>listPlannedSchedules</code>, not by guessing.</p>
+        <p>Accepted for the same reason as H6 — this module treats PMO/ITPM/BA as one trusted internal pool for deployment operations, matching the precedent already accepted for CR-field edits elsewhere in the app. Application-level segmentation exists in the assignment flow (<code>assignCrsToDeployment</code>'s ownership check) as a UX default, not as a hard authorization boundary for every subsequent action on a schedule.</p>
+      </div>
+    </article>
+
+    <article class="finding" data-sev="medium" data-status="accepted" id="m7">
+      <div class="finding-head">
+        <h3>V4.1 — Deployment CR details readable with no role or ownership check <span class="finding-id">M7</span></h3>
+        <div class="chip-row"><span class="chip medium">Medium</span><span class="chip accepted">Accepted risk</span></div>
+      </div>
+      <div class="loc"><b>deployment.functions.ts</b> — <code>getDeploymentScheduleCrs</code>, <code>listPlannedSchedules</code></div>
+      <div class="resolution">
+        <div class="k">Status — accepted, by explicit decision (V4.1 scan)</div>
+        <p><code>getDeploymentScheduleCrs</code> calls only <code>requireSessionUser()</code> — no role check at all — and returns <code>ba</code>, <code>itpm</code>, <code>cr_size</code>, <code>workflow_status</code>, and free-text <code>deployment_remarks</code> for every CR on a given schedule, regardless of the caller's relationship to it. Reachable by any authenticated session, including a Tester's, since nav-link hiding doesn't gate the underlying server function.</p>
+        <p>Accepted consistent with the model already established at <a href="#l1">L1</a>: general CR metadata (BA/ITPM names, workflow status, size) is treated as broadly visible to any authenticated internal user by design, not as segmented, sensitive data — the same posture that made L1 a deliberate broad-visibility resolution rather than a strict per-role lockdown. No PII, credentials, or financial data is exposed here, and every caller is an authenticated internal staff account, not an external or anonymous party.</p>
       </div>
     </article>
   </section>
@@ -623,7 +665,7 @@
     <h2>OWASP Top 10 (2021) Mapping</h2>
     <table class="owasp">
       <tr><th>Category</th><th>Original</th><th>Now</th><th>Findings</th></tr>
-      <tr><td>A01 Broken Access Control</td><td><span class="chip critical">Critical</span></td><td><span class="chip resolved">Resolved</span></td><td><code>C1</code> <code>C2</code> <code>M1</code> <code>M2</code></td></tr>
+      <tr><td>A01 Broken Access Control</td><td><span class="chip critical">Critical</span></td><td><span class="chip resolved">Resolved</span> + <span class="chip accepted">Accepted risk</span></td><td><code>C1</code> <code>C2</code> <code>M1</code> <code>M2</code> <code>H6</code> <code>M6</code> <code>M7</code></td></tr>
       <tr><td>A02 Cryptographic Failures</td><td><span class="chip critical">Critical</span></td><td><span class="chip accepted">Accepted risk</span></td><td><code>C3</code> <code>L2</code></td></tr>
       <tr><td>A03 Injection</td><td><span class="chip high">High</span></td><td><span class="chip resolved">Resolved</span></td><td><code>H3</code> <code>M1</code></td></tr>
       <tr><td>A04 Insecure Design</td><td><span class="chip high">High</span></td><td><span class="chip resolved">Resolved</span></td><td><code>C1</code> <code>H1</code> <code>M5</code></td></tr>
@@ -638,7 +680,7 @@
 
   <section id="outstanding">
     <h2>Final Status</h2>
-    <p class="lede">No action items remain. Every fix has been applied, verified, and — where a schema change was involved — confirmed executed against the live database. Nothing left on this list is a gap; the four items below were reviewed and deliberately accepted as risk rather than fixed, each for a stated reason.</p>
+    <p class="lede">No action items remain. Every fix has been applied, verified, and — where a schema change was involved — confirmed executed against the live database. Nothing left on this list is a gap; the seven items below (four from the original assessment, three from the V4.1 scan of the Deployment Management module) were reviewed and deliberately accepted as risk rather than fixed, each for a stated reason.</p>
     <div class="resolution" style="margin-top:0">
       <div class="k">Accepted as risk — noted for the record, not oversights</div>
       <ul>
@@ -646,12 +688,15 @@
         <li>Four UAT employees' passwords remain unreset — production will run on an entirely separate, freshly-provisioned user set. (C3)</li>
         <li>A deactivated user's live session isn't force-revoked, though it can no longer reach any actual data. (M3)</li>
         <li>Session tokens stay in <code>localStorage</code> rather than an httpOnly cookie — the SDK default, with no active XSS vector found to justify the architectural change. (L2)</li>
+        <li>Deployment schedule completion cascades <code>deployment_stage</code>/<code>workflow_status</code> onto CRs across applications with no per-caller ownership check — consistent with the app's existing internal-trust model for PMO/ITPM/BA. (H6)</li>
+        <li>Any PMO/ITPM/BA can reschedule or cancel any deployment schedule, not just ones tied to their own CRs. (M6)</li>
+        <li>Deployment schedule CR details (BA/ITPM names, size, status, remarks) are readable by any authenticated session with no role/ownership check, consistent with this app's already-accepted broad internal visibility model (L1). (M7)</li>
       </ul>
     </div>
   </section>
 
   <footer>
-    This is a living document: findings were worked through interactively with the team, with business rules (who should have access to what, and which risks were acceptable to leave as-is) confirmed directly rather than assumed, and fixes verified with actual runtime tests where feasible — round-tripping payloads, simulating attempt sequences, fetching pages directly and inspecting response headers — not just a passing type-check. Two regressions introduced during remediation itself (a CSP blank-page bug, a locale-formatting bug) were caught during that verification and corrected before being reported as done. No dynamic penetration testing was performed against a live deployment; production/Vercel deployment status of this code is outside what can be confirmed from source alone. Original assessment: 2026-07-10. Remediation status current as of 2026-07-12.
+    This is a living document: findings were worked through interactively with the team, with business rules (who should have access to what, and which risks were acceptable to leave as-is) confirmed directly rather than assumed, and fixes verified with actual runtime tests where feasible — round-tripping payloads, simulating attempt sequences, fetching pages directly and inspecting response headers — not just a passing type-check. Two regressions introduced during remediation itself (a CSP blank-page bug, a locale-formatting bug) were caught during that verification and corrected before being reported as done. No dynamic penetration testing was performed against a live deployment; production/Vercel deployment status of this code is outside what can be confirmed from source alone. Original assessment: 2026-07-10. Remediation status as of 2026-07-12. <b>V4.1 scan</b> (2026-07-19) targeted the new Deployment Management module added since the original assessment — three findings (H6, M6, M7), all reviewed and accepted as risk against the app's existing internal-trust and broad-visibility precedents rather than fixed.
   </footer>
 
 </div>
