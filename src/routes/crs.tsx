@@ -334,7 +334,7 @@ function CrRepository() {
                     <SortIcon k="cr_number" />
                   </TableHead>
                   <TableHead
-                    className="cursor-pointer select-none sticky left-[110px] z-20 w-[220px] min-w-[220px] bg-card border-r"
+                    className="cursor-pointer select-none sticky left-[110px] z-20 w-[440px] min-w-[440px] bg-card border-r"
                     onClick={() => toggleSort("title")}
                   >
                     Title
@@ -458,7 +458,7 @@ function CrRepository() {
                           {c.cr_number}
                         </Link>
                       </TableCell>
-                      <TableCell className="sticky left-[110px] z-10 w-[220px] min-w-[220px] bg-card border-r truncate">
+                      <TableCell className="sticky left-[110px] z-10 w-[440px] min-w-[440px] bg-card border-r whitespace-normal break-words align-top">
                         {c.title}
                       </TableCell>
                       <TableCell>{c.application}</TableCell>
