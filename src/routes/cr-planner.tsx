@@ -340,8 +340,16 @@ function CrPlannerView() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <SortHead k="crNumber" label="CR Number" />
-                  <SortHead k="title" label="Title" />
+                  <SortHead
+                    k="crNumber"
+                    label="CR Number"
+                    className="sticky left-0 z-20 w-[110px] min-w-[110px] bg-card"
+                  />
+                  <SortHead
+                    k="title"
+                    label="Title"
+                    className="sticky left-[110px] z-20 w-[220px] min-w-[220px] bg-card border-r whitespace-normal"
+                  />
                   <SortHead k="dateCreated" label="Date Created" />
                   <SortHead k="dateModified" label="Date Modified" />
                   <SortHead k="createdUser" label="Created User" />
@@ -540,8 +548,12 @@ function PlannerGridRowView({
 
   return (
     <TableRow>
-      <TableCell className="font-medium whitespace-nowrap">{row.crNumber}</TableCell>
-      <TableCell className="max-w-xs truncate">{row.title}</TableCell>
+      <TableCell className="sticky left-0 z-10 w-[110px] min-w-[110px] bg-card font-medium whitespace-nowrap">
+        {row.crNumber}
+      </TableCell>
+      <TableCell className="sticky left-[110px] z-10 w-[220px] min-w-[220px] bg-card border-r whitespace-normal break-words align-top">
+        {row.title}
+      </TableCell>
       <TableCell className="text-xs whitespace-nowrap">{fmtTimestamp(row.dateCreated)}</TableCell>
       <TableCell className="text-xs whitespace-nowrap">{fmtTimestamp(row.dateModified)}</TableCell>
       <TableCell>{row.createdUser ?? "—"}</TableCell>
