@@ -14,6 +14,68 @@ export type Database = {
   }
   public: {
     Tables: {
+      cr_planner: {
+        Row: {
+          cr_number: string
+          created_at: string
+          created_by: string
+          dev_effort: number | null
+          dev_end_date: string | null
+          dev_resource: string | null
+          dev_start_date: string | null
+          modified_at: string
+          modified_by: string | null
+          planner_id: string
+          prod_date: string | null
+          remarks: string | null
+          sit_effort: number | null
+          sit_start_date: string | null
+          uat_date: string | null
+        }
+        Insert: {
+          cr_number: string
+          created_at?: string
+          created_by: string
+          dev_effort?: number | null
+          dev_end_date?: string | null
+          dev_resource?: string | null
+          dev_start_date?: string | null
+          modified_at?: string
+          modified_by?: string | null
+          planner_id?: string
+          prod_date?: string | null
+          remarks?: string | null
+          sit_effort?: number | null
+          sit_start_date?: string | null
+          uat_date?: string | null
+        }
+        Update: {
+          cr_number?: string
+          created_at?: string
+          created_by?: string
+          dev_effort?: number | null
+          dev_end_date?: string | null
+          dev_resource?: string | null
+          dev_start_date?: string | null
+          modified_at?: string
+          modified_by?: string | null
+          planner_id?: string
+          prod_date?: string | null
+          remarks?: string | null
+          sit_effort?: number | null
+          sit_start_date?: string | null
+          uat_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cr_planner_cr_number_fkey"
+            columns: ["cr_number"]
+            isOneToOne: true
+            referencedRelation: "crs"
+            referencedColumns: ["cr_number"]
+          },
+        ]
+      }
       crs: {
         Row: {
           application: string | null
@@ -409,6 +471,30 @@ export type Database = {
           new_value?: Json | null
           old_value?: Json | null
           performed_by?: string
+        }
+        Relationships: []
+      }
+      deployment_master: {
+        Row: {
+          application: string | null
+          created_at: string
+          created_by: string
+          deployment_date: string
+          id: string
+        }
+        Insert: {
+          application?: string | null
+          created_at?: string
+          created_by: string
+          deployment_date: string
+          id?: string
+        }
+        Update: {
+          application?: string | null
+          created_at?: string
+          created_by?: string
+          deployment_date?: string
+          id?: string
         }
         Relationships: []
       }

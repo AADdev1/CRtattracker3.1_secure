@@ -21,6 +21,7 @@ import { Route as DeploymentPlanningRouteImport } from './routes/deployment-plan
 import { Route as DefectStatusesRouteImport } from './routes/defect-statuses'
 import { Route as CrsRouteImport } from './routes/crs'
 import { Route as CrSizesRouteImport } from './routes/cr-sizes'
+import { Route as CrPlannerRouteImport } from './routes/cr-planner'
 import { Route as CrAllocationRouteImport } from './routes/cr-allocation'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
@@ -87,6 +88,11 @@ const CrSizesRoute = CrSizesRouteImport.update({
   path: '/cr-sizes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CrPlannerRoute = CrPlannerRouteImport.update({
+  id: '/cr-planner',
+  path: '/cr-planner',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CrAllocationRoute = CrAllocationRouteImport.update({
   id: '/cr-allocation',
   path: '/cr-allocation',
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/cr-allocation': typeof CrAllocationRoute
+  '/cr-planner': typeof CrPlannerRoute
   '/cr-sizes': typeof CrSizesRoute
   '/crs': typeof CrsRouteWithChildren
   '/defect-statuses': typeof DefectStatusesRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/cr-allocation': typeof CrAllocationRoute
+  '/cr-planner': typeof CrPlannerRoute
   '/cr-sizes': typeof CrSizesRoute
   '/crs': typeof CrsRouteWithChildren
   '/defect-statuses': typeof DefectStatusesRoute
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/cr-allocation': typeof CrAllocationRoute
+  '/cr-planner': typeof CrPlannerRoute
   '/cr-sizes': typeof CrSizesRoute
   '/crs': typeof CrsRouteWithChildren
   '/defect-statuses': typeof DefectStatusesRoute
@@ -177,6 +186,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/cr-allocation'
+    | '/cr-planner'
     | '/cr-sizes'
     | '/crs'
     | '/defect-statuses'
@@ -196,6 +206,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/cr-allocation'
+    | '/cr-planner'
     | '/cr-sizes'
     | '/crs'
     | '/defect-statuses'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/cr-allocation'
+    | '/cr-planner'
     | '/cr-sizes'
     | '/crs'
     | '/defect-statuses'
@@ -235,6 +247,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   CrAllocationRoute: typeof CrAllocationRoute
+  CrPlannerRoute: typeof CrPlannerRoute
   CrSizesRoute: typeof CrSizesRoute
   CrsRoute: typeof CrsRouteWithChildren
   DefectStatusesRoute: typeof DefectStatusesRoute
@@ -336,6 +349,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CrSizesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cr-planner': {
+      id: '/cr-planner'
+      path: '/cr-planner'
+      fullPath: '/cr-planner'
+      preLoaderRoute: typeof CrPlannerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/cr-allocation': {
       id: '/cr-allocation'
       path: '/cr-allocation'
@@ -388,6 +408,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   CrAllocationRoute: CrAllocationRoute,
+  CrPlannerRoute: CrPlannerRoute,
   CrSizesRoute: CrSizesRoute,
   CrsRoute: CrsRouteWithChildren,
   DefectStatusesRoute: DefectStatusesRoute,

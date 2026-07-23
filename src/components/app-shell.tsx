@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
   ShieldCheck,
   ClipboardList,
+  CalendarRange,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -47,6 +48,10 @@ const nav = [
     icon: ClipboardList,
     requiresDeploymentAccess: true,
   },
+  // CR Planner is a standalone, ITPM-exclusive module (see
+  // cr-planner.functions.ts) — deliberately ITPM only, no Admin bypass,
+  // unlike every other requires*Access flag in this file.
+  { to: "/cr-planner", label: "CR Planner", icon: CalendarRange, requiresItpmOnlyAccess: true },
   {
     to: "/test-case-upload",
     label: "Test Case Upload",
@@ -91,6 +96,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   // but not act on it, unlike CR Size Management where Admin has no access
   // at all — so Admin is included here for nav visibility.
   const canSeeDeployment = isAdmin || role === "PMO" || role === "ITPM" || role === "BA";
+  // CR Planner: ITPM only, deliberately excluding Admin — matches the
+  // spec's "Visible only for ITPM users" literally.
+  const canSeePlanner = role === "ITPM";
   // Persisted across navigations (AppShell remounts per route) and reloads
   // via localStorage — this is a pure UI preference, no reason to round-trip
   // it through the backend.
@@ -174,6 +182,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             if ("requiresCrEditAccess" in item && !canSeeCrSizes) return null;
             if ("requiresSecurityReportAccess" in item && !canSeeSecurityReport) return null;
             if ("requiresDeploymentAccess" in item && !canSeeDeployment) return null;
+            if ("requiresItpmOnlyAccess" in item && !canSeePlanner) return null;
             if ("hiddenForTester" in item && isTester) return null;
             const Icon = item.icon;
             const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
