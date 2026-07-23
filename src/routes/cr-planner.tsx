@@ -71,8 +71,22 @@ export const Route = createFileRoute("/cr-planner")({
 const PAGE_SIZE = 25;
 const DEV_RESOURCES = ["R1", "R2"] as const;
 
+// For plain `date` columns (dev_start_date, prod_date, deployment_master's
+// deployment_date) — these come back as bare "yyyy-MM-dd" with no time or
+// offset, so "T00:00:00" is appended to parse them as local midnight
+// instead of UTC midnight (avoids an off-by-one-day shift in negative-UTC
+// timezones).
 function fmtDate(d: string | null): string {
   return d ? format(new Date(`${d}T00:00:00`), "dd-MMM-yyyy") : "—";
+}
+
+// For `timestamptz` columns (crs.date_created / date_modified) — these
+// already come back as a full ISO datetime with an offset (e.g.
+// "2026-07-17T18:04:00+00:00"), so appending anything breaks parsing.
+// Using fmtDate on these was the actual cause of the grid crashing a
+// couple seconds after load, once real row data arrived.
+function fmtTimestamp(d: string | null): string {
+  return d ? format(new Date(d), "dd-MMM-yyyy") : "—";
 }
 
 function ageDays(d: string | null): number | null {
@@ -528,8 +542,8 @@ function PlannerGridRowView({
     <TableRow>
       <TableCell className="font-medium whitespace-nowrap">{row.crNumber}</TableCell>
       <TableCell className="max-w-xs truncate">{row.title}</TableCell>
-      <TableCell className="text-xs whitespace-nowrap">{fmtDate(row.dateCreated)}</TableCell>
-      <TableCell className="text-xs whitespace-nowrap">{fmtDate(row.dateModified)}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap">{fmtTimestamp(row.dateCreated)}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap">{fmtTimestamp(row.dateModified)}</TableCell>
       <TableCell>{row.createdUser ?? "—"}</TableCell>
       <TableCell className="text-xs text-muted-foreground">{row.workflowStatus}</TableCell>
       <TableCell className="text-right tabular-nums">{ac == null ? "—" : `${ac}d`}</TableCell>
