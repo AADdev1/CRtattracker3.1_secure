@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -597,23 +597,43 @@ function PlannerGridRowView({
       </TableCell>
 
       <TableCell>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="w-32 justify-start font-normal">
-              {devStartDate ? format(devStartDate, "dd-MMM-yyyy") : "—"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
-            <Calendar
-              mode="single"
-              selected={devStartDate}
-              onSelect={(d) => {
-                setDevStartDate(d);
-                update.mutate({ devStartDate: d ? format(d, "yyyy-MM-dd") : null });
+        <div className="flex items-center gap-1">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="w-32 justify-start font-normal">
+                {devStartDate ? format(devStartDate, "dd-MMM-yyyy") : "—"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={devStartDate}
+                onSelect={(d) => {
+                  setDevStartDate(d);
+                  update.mutate({ devStartDate: d ? format(d, "yyyy-MM-dd") : null });
+                }}
+              />
+            </PopoverContent>
+          </Popover>
+          {devStartDate && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 shrink-0"
+              title="Clear date"
+              onClick={() => {
+                // Effort without a start date can't compute an end date, and
+                // fails the "Dev Start Date required if Dev Effort entered"
+                // rule server-side — clear both together, not just the date.
+                setDevStartDate(undefined);
+                setDevEffort("");
+                update.mutate({ devStartDate: null, devEffort: null });
               }}
-            />
-          </PopoverContent>
-        </Popover>
+            >
+              <X className="size-3" />
+            </Button>
+          )}
+        </div>
       </TableCell>
 
       <TableCell className="bg-muted text-xs whitespace-nowrap">
@@ -635,23 +655,43 @@ function PlannerGridRowView({
       </TableCell>
 
       <TableCell>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="w-32 justify-start font-normal">
-              {sitStartDate ? format(sitStartDate, "dd-MMM-yyyy") : "—"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
-            <Calendar
-              mode="single"
-              selected={sitStartDate}
-              onSelect={(d) => {
-                setSitStartDate(d);
-                update.mutate({ sitStartDate: d ? format(d, "yyyy-MM-dd") : null });
+        <div className="flex items-center gap-1">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="w-32 justify-start font-normal">
+                {sitStartDate ? format(sitStartDate, "dd-MMM-yyyy") : "—"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={sitStartDate}
+                onSelect={(d) => {
+                  setSitStartDate(d);
+                  update.mutate({ sitStartDate: d ? format(d, "yyyy-MM-dd") : null });
+                }}
+              />
+            </PopoverContent>
+          </Popover>
+          {sitStartDate && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 shrink-0"
+              title="Clear date"
+              onClick={() => {
+                // Same reasoning as Dev Start Date's clear button — clear
+                // the paired effort too, or the server's "SIT Start Date
+                // required if SIT Effort entered" rule rejects it.
+                setSitStartDate(undefined);
+                setSitEffort("");
+                update.mutate({ sitStartDate: null, sitEffort: null });
               }}
-            />
-          </PopoverContent>
-        </Popover>
+            >
+              <X className="size-3" />
+            </Button>
+          )}
+        </div>
       </TableCell>
 
       <TableCell className="bg-muted text-xs whitespace-nowrap">
@@ -659,25 +699,41 @@ function PlannerGridRowView({
       </TableCell>
 
       <TableCell>
-        <Select
-          value={prodDate || undefined}
-          onValueChange={(v) => {
-            setProdDate(v);
-            update.mutate({ prodDate: v });
-          }}
-        >
-          <SelectTrigger className="w-36 h-8">
-            <SelectValue placeholder="Pick date…" />
-          </SelectTrigger>
-          <SelectContent>
-            {masterDates.map((m) => (
-              <SelectItem key={m.id} value={m.deployment_date}>
-                {fmtDate(m.deployment_date)}
-                {m.application ? ` (${m.application})` : ""}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-1">
+          <Select
+            value={prodDate || undefined}
+            onValueChange={(v) => {
+              setProdDate(v);
+              update.mutate({ prodDate: v });
+            }}
+          >
+            <SelectTrigger className="w-36 h-8">
+              <SelectValue placeholder="Pick date…" />
+            </SelectTrigger>
+            <SelectContent>
+              {masterDates.map((m) => (
+                <SelectItem key={m.id} value={m.deployment_date}>
+                  {fmtDate(m.deployment_date)}
+                  {m.application ? ` (${m.application})` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {prodDate && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 shrink-0"
+              title="Clear date"
+              onClick={() => {
+                setProdDate("");
+                update.mutate({ prodDate: null });
+              }}
+            >
+              <X className="size-3" />
+            </Button>
+          )}
+        </div>
       </TableCell>
 
       <TableCell>
