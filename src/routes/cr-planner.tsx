@@ -350,6 +350,15 @@ function CrPlannerView() {
                     label="Title"
                     className="sticky left-[110px] z-20 w-[220px] min-w-[220px] bg-card border-r whitespace-normal"
                   />
+                  <SortHead k="devResource" label="Developer" />
+                  <SortHead k="devEffort" label="Dev Effort" className="text-right" />
+                  <SortHead k="devStartDate" label="Dev Start Date" />
+                  <SortHead k="devEndDate" label="Dev End Date" />
+                  <SortHead k="sitEffort" label="SIT Effort" className="text-right" />
+                  <SortHead k="sitStartDate" label="SIT Start Date" />
+                  <SortHead k="uatDate" label="UAT Date" />
+                  <SortHead k="prodDate" label="PROD Date" />
+                  <TableHead>Remarks</TableHead>
                   <SortHead k="dateCreated" label="Date Created" />
                   <SortHead k="dateModified" label="Date Modified" />
                   <SortHead k="createdUser" label="Created User" />
@@ -360,15 +369,6 @@ function CrPlannerView() {
                     label="Last Updated Aging"
                     className="text-right"
                   />
-                  <SortHead k="devResource" label="Developer" />
-                  <SortHead k="devEffort" label="Dev Effort" className="text-right" />
-                  <SortHead k="devStartDate" label="Dev Start Date" />
-                  <SortHead k="devEndDate" label="Dev End Date" />
-                  <SortHead k="sitEffort" label="SIT Effort" className="text-right" />
-                  <SortHead k="sitStartDate" label="SIT Start Date" />
-                  <SortHead k="uatDate" label="UAT Date" />
-                  <SortHead k="prodDate" label="PROD Date" />
-                  <TableHead>Remarks</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -554,12 +554,6 @@ function PlannerGridRowView({
       <TableCell className="sticky left-[110px] z-10 w-[220px] min-w-[220px] bg-card border-r whitespace-normal break-words align-top">
         {row.title}
       </TableCell>
-      <TableCell className="text-xs whitespace-nowrap">{fmtTimestamp(row.dateCreated)}</TableCell>
-      <TableCell className="text-xs whitespace-nowrap">{fmtTimestamp(row.dateModified)}</TableCell>
-      <TableCell>{row.createdUser ?? "—"}</TableCell>
-      <TableCell className="text-xs text-muted-foreground">{row.workflowStatus}</TableCell>
-      <TableCell className="text-right tabular-nums">{ac == null ? "—" : `${ac}d`}</TableCell>
-      <TableCell className="text-right tabular-nums">{am == null ? "—" : `${am}d`}</TableCell>
 
       <TableCell>
         <Select
@@ -747,6 +741,13 @@ function PlannerGridRowView({
           }}
         />
       </TableCell>
+
+      <TableCell className="text-xs whitespace-nowrap">{fmtTimestamp(row.dateCreated)}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap">{fmtTimestamp(row.dateModified)}</TableCell>
+      <TableCell>{row.createdUser ?? "—"}</TableCell>
+      <TableCell className="text-xs text-muted-foreground">{row.workflowStatus}</TableCell>
+      <TableCell className="text-right tabular-nums">{ac == null ? "—" : `${ac}d`}</TableCell>
+      <TableCell className="text-right tabular-nums">{am == null ? "—" : `${am}d`}</TableCell>
     </TableRow>
   );
 }
