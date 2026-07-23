@@ -40,6 +40,27 @@ export const MANUAL_DEPLOYMENT_STAGES: DeploymentStage[] = [
 ];
 const MANUAL_STAGES_SET = new Set<DeploymentStage>(MANUAL_DEPLOYMENT_STAGES);
 
+// crs.workflow_status is inconsistently formatted in live data — CSV
+// import writes the raw CMS code text (underscore, e.g. "28_Deployed in
+// Production"), but some rows carry the friendlier label text instead
+// (space, e.g. "29 Live and Closed" — confirmed present in production
+// data). Both variants are listed per status, plus the CMS's own
+// "Delpoyed" typo in the Tech Go code, so an exact-match check can't
+// silently miss a CR just because of which format happened to get set.
+// These four are the terminal/closed statuses — a CR at any of them has
+// already gone live (or been closed out) and isn't a deployment-planning
+// candidate anymore.
+export const DEPLOYMENT_TERMINAL_WORKFLOW_STATUSES = new Set([
+  "28_Deployed in Production",
+  "28 Deployed in Production",
+  "28_Tech Go Delpoyed in Production",
+  "28 Tech Go - Deployed in Production",
+  "29_Live and Closed",
+  "29 Live and Closed",
+  "30_Issue in production",
+  "30 Issue in Production",
+]);
+
 async function assertDeploymentActor() {
   const session = await requireSessionUser();
   if (session.role !== "PMO" && session.role !== "ITPM" && session.role !== "BA") {
@@ -193,10 +214,14 @@ export const listCrApplications = createServerFn({ method: "GET" }).handler(asyn
   return apps;
 });
 
-// Eligibility: crs.workflow_status = '24_UAT Signed Off' — the CR's
-// current CMS status, not the derived deployment_stage flag — and not
-// already carrying a deployment_date. Sourced from crs alone. PMO/Admin
-// see every eligible CR; ITPM/BA see only CRs where they're the BA/ITPM.
+// Eligibility: any active (not dropped) CR whose workflow_status isn't
+// one of the terminal/closed statuses (DEPLOYMENT_TERMINAL_WORKFLOW_STATUSES
+// — deployed to production, tech-go deployed, live and closed, or issue in
+// production), and not already carrying a deployment_date. This is
+// deliberately broad — a CR at any earlier stage (BRD, dev, UAT, etc.) is
+// plannable, not just ones that already reached UAT Signed Off. Sourced
+// from crs alone. PMO/Admin see every eligible CR; ITPM/BA see only CRs
+// where they're the BA/ITPM.
 export const listEligibleCrsForPlanning = createServerFn({ method: "GET" }).handler(async () => {
   const { isAdmin, userName, role } = await requireSessionUser();
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -204,14 +229,18 @@ export const listEligibleCrsForPlanning = createServerFn({ method: "GET" }).hand
   const { data: eligible, error } = await supabaseAdmin
     .from("crs")
     .select("cr_number, application, cr_size, itpm, ba, workflow_status")
-    .eq("workflow_status", "24_UAT Signed Off")
+    .eq("is_dropped", false)
     .is("deployment_date", null);
   if (error) throw new Error(error.message);
   if (!eligible || eligible.length === 0) return [];
 
+  const notTerminal = eligible.filter(
+    (c) => !c.workflow_status || !DEPLOYMENT_TERMINAL_WORKFLOW_STATUSES.has(c.workflow_status),
+  );
+
   return isAdmin || role === "PMO"
-    ? eligible
-    : eligible.filter((c) => c.ba === userName || c.itpm === userName);
+    ? notTerminal
+    : notTerminal.filter((c) => c.ba === userName || c.itpm === userName);
 });
 
 export const getDeploymentDashboardSummary = createServerFn({ method: "GET" }).handler(async () => {

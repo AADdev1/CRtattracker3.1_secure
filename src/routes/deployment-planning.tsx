@@ -248,7 +248,7 @@ function DeploymentPlanningView({ canManage }: { canManage: boolean }) {
     <AppShell>
       <PageHeader
         title="Deployment Planning"
-        description="Create deployment schedules, assign CRs that have reached UAT Signed Off, and track them through to production."
+        description="Create deployment schedules, assign active CRs to them, and track them through to production."
         actions={
           canManage ? (
             <Dialog
@@ -414,7 +414,6 @@ function DeploymentPlanningView({ canManage }: { canManage: boolean }) {
                       <TableHead>Assigned ITPM</TableHead>
                       <TableHead>Assigned BA</TableHead>
                       <TableHead>Workflow Status</TableHead>
-                      <TableHead>Deployment Stage</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -436,18 +435,16 @@ function DeploymentPlanningView({ canManage }: { canManage: boolean }) {
                         <TableCell className="text-xs text-muted-foreground">
                           {c.workflow_status}
                         </TableCell>
-                        <TableCell>
-                          <DeploymentStageBadge stage="UAT Signed Off" />
-                        </TableCell>
                       </TableRow>
                     ))}
                     {rows.length === 0 && (
                       <TableRow>
                         <TableCell
-                          colSpan={canManage ? 8 : 7}
+                          colSpan={canManage ? 7 : 6}
                           className="text-center py-12 text-muted-foreground"
                         >
-                          No eligible CRs — nothing has reached UAT Signed Off yet.
+                          No eligible CRs — everything active is either already assigned or already
+                          deployed/closed.
                         </TableCell>
                       </TableRow>
                     )}

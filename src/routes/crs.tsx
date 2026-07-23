@@ -37,6 +37,7 @@ import { getWorkflowStatuses } from "@/lib/workflow-statuses.functions";
 import { updateCrWorkflowStatus } from "@/lib/crs-admin.functions";
 import { getTestCaseCompletionByCr } from "@/lib/test-cases.functions";
 import {
+  DEPLOYMENT_TERMINAL_WORKFLOW_STATUSES,
   getDeploymentInfoByCr,
   MANUAL_DEPLOYMENT_STAGES,
   updateDeploymentStage,
@@ -445,8 +446,8 @@ function CrRepository() {
                   // deployment_stage having been separately synced to match.
                   const isDeployedToProduction =
                     dep?.deployment_stage === "Deployed to Production" ||
-                    c.workflow_status === "28_Deployed in Production" ||
-                    c.workflow_status === "29_Live and Closed";
+                    (!!c.workflow_status &&
+                      DEPLOYMENT_TERMINAL_WORKFLOW_STATUSES.has(c.workflow_status));
                   return (
                     <TableRow key={c.cr_number}>
                       <TableCell className="sticky left-0 z-10 w-[110px] min-w-[110px] bg-card">
