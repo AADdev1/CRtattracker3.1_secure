@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -105,10 +105,10 @@ function CrPlannerPage() {
   const navigate = useNavigate();
   const canAccess = role === "ITPM";
 
-  if (!isLoading && !canAccess) {
-    navigate({ to: "/" });
-    return null;
-  }
+  useEffect(() => {
+    if (!isLoading && !canAccess) navigate({ to: "/" });
+  }, [isLoading, canAccess, navigate]);
+
   if (isLoading || !canAccess) return null;
 
   return <CrPlannerView />;
