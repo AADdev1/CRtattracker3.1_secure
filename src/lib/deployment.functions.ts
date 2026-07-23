@@ -226,10 +226,14 @@ export const listEligibleCrsForPlanning = createServerFn({ method: "GET" }).hand
   const { isAdmin, userName, role } = await requireSessionUser();
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+  // is_dropped is nullable in the live table — matching the convention
+  // already used in kpi-engine.ts (!cr.is_dropped), NULL counts as "not
+  // dropped". .eq("is_dropped", false) would silently exclude every NULL
+  // row too, since SQL's NULL = false is never true.
   const { data: eligible, error } = await supabaseAdmin
     .from("crs")
     .select("cr_number, application, cr_size, itpm, ba, workflow_status")
-    .eq("is_dropped", false)
+    .or("is_dropped.is.null,is_dropped.eq.false")
     .is("deployment_date", null);
   if (error) throw new Error(error.message);
   if (!eligible || eligible.length === 0) return [];

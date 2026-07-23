@@ -49,8 +49,16 @@ export const listActiveCrsForPlanner = createServerFn({ method: "GET" }).handler
   await assertPlannerActor();
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+  // is_dropped is nullable in the live table (not every row has it
+  // explicitly set to false) — matching the convention already used in
+  // kpi-engine.ts (!cr.is_dropped), NULL counts as "not dropped", not
+  // "unknown/excluded". .eq("is_dropped", false) would silently drop
+  // every NULL row too, since SQL's NULL = false is never true.
   const [{ data: crs, error: crsErr }, { data: planned, error: plannedErr }] = await Promise.all([
-    supabaseAdmin.from("crs").select("cr_number, title, workflow_status").eq("is_dropped", false),
+    supabaseAdmin
+      .from("crs")
+      .select("cr_number, title, workflow_status")
+      .or("is_dropped.is.null,is_dropped.eq.false"),
     supabaseAdmin.from("cr_planner").select("cr_number"),
   ]);
   if (crsErr) throw new Error(crsErr.message);
