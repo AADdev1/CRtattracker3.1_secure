@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Check, ChevronsUpDown, Plus, X } from "lucide-react";
+import { Check, ChevronsUpDown, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,14 +36,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
   Pagination,
   PaginationContent,
   PaginationItem,
@@ -56,9 +48,8 @@ import { useAppUser } from "@/lib/app-user";
 import { addWorkingDays } from "@/lib/working-days";
 import {
   addCrsToPlanner,
-  addDeploymentMasterDate,
   listActiveCrsForPlanner,
-  listDeploymentMasterDates,
+  listPlannedDeploymentDates,
   listPlannerGrid,
   updatePlannerEntry,
 } from "@/lib/cr-planner.functions";
@@ -133,7 +124,7 @@ function CrPlannerView() {
   const listActiveFn = useServerFn(listActiveCrsForPlanner);
   const addToPlannerFn = useServerFn(addCrsToPlanner);
   const listGridFn = useServerFn(listPlannerGrid);
-  const listMasterDatesFn = useServerFn(listDeploymentMasterDates);
+  const listPlannedDatesFn = useServerFn(listPlannedDeploymentDates);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -152,9 +143,11 @@ function CrPlannerView() {
     queryFn: () => listGridFn(),
   });
 
-  const masterDates = useQuery({
-    queryKey: ["cr-planner-master-dates"],
-    queryFn: () => listMasterDatesFn(),
+  // Read-only — mirrors the Deployment Planning module's Planned
+  // schedules, no add/write capability from this page.
+  const plannedDates = useQuery({
+    queryKey: ["cr-planner-planned-dates"],
+    queryFn: () => listPlannedDatesFn(),
   });
 
   const addToPlanner = useMutation({
@@ -331,7 +324,6 @@ function CrPlannerView() {
               }}
               className="max-w-sm"
             />
-            <AddMasterDateDialog masterDatesQueryKey={["cr-planner-master-dates"]} />
           </CardContent>
         </Card>
 
@@ -376,7 +368,7 @@ function CrPlannerView() {
                   <PlannerGridRowView
                     key={row.crNumber}
                     row={row}
-                    masterDates={masterDates.data ?? []}
+                    plannedDates={plannedDates.data ?? []}
                   />
                 ))}
                 {paged.length === 0 && (
@@ -425,75 +417,17 @@ function CrPlannerView() {
   );
 }
 
-function AddMasterDateDialog({ masterDatesQueryKey }: { masterDatesQueryKey: string[] }) {
-  const qc = useQueryClient();
-  const addDateFn = useServerFn(addDeploymentMasterDate);
-  const [open, setOpen] = useState(false);
-  const [date, setDate] = useState<Date | undefined>(undefined);
-  const [application, setApplication] = useState("");
-
-  const addDate = useMutation({
-    mutationFn: () =>
-      addDateFn({
-        data: {
-          deploymentDate: format(date!, "yyyy-MM-dd"),
-          application: application.trim() || null,
-        },
-      }),
-    onSuccess: () => {
-      toast.success("Deployment Master date added");
-      setOpen(false);
-      setDate(undefined);
-      setApplication("");
-      qc.invalidateQueries({ queryKey: masterDatesQueryKey });
-    },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : String(e)),
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Plus className="size-3.5 mr-1" /> Add Deployment Master Date
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add Deployment Master Date</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="w-full justify-start font-normal">
-                {date ? format(date, "dd-MMM-yyyy") : "Pick a date…"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar mode="single" selected={date} onSelect={setDate} />
-            </PopoverContent>
-          </Popover>
-          <Input
-            placeholder="Application (optional)"
-            value={application}
-            onChange={(e) => setApplication(e.target.value)}
-          />
-        </div>
-        <DialogFooter>
-          <Button disabled={!date || addDate.isPending} onClick={() => addDate.mutate()}>
-            {addDate.isPending ? "Adding…" : "Add"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function PlannerGridRowView({
   row,
-  masterDates,
+  plannedDates,
 }: {
   row: PlannerGridRow;
-  masterDates: { id: string; deployment_date: string; application: string | null }[];
+  plannedDates: {
+    id: string;
+    deployment_name: string;
+    application: string | null;
+    deployment_date: string;
+  }[];
 }) {
   const qc = useQueryClient();
   const updateFn = useServerFn(updatePlannerEntry);
@@ -705,10 +639,10 @@ function PlannerGridRowView({
               <SelectValue placeholder="Pick date…" />
             </SelectTrigger>
             <SelectContent>
-              {masterDates.map((m) => (
-                <SelectItem key={m.id} value={m.deployment_date}>
-                  {fmtDate(m.deployment_date)}
-                  {m.application ? ` (${m.application})` : ""}
+              {plannedDates.map((d) => (
+                <SelectItem key={d.id} value={d.deployment_date}>
+                  {fmtDate(d.deployment_date)} — {d.deployment_name}
+                  {d.application ? ` (${d.application})` : ""}
                 </SelectItem>
               ))}
             </SelectContent>

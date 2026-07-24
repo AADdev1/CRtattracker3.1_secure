@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   ClipboardList,
   CalendarRange,
+  CalendarDays,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -52,6 +53,15 @@ const nav = [
   // cr-planner.functions.ts) — deliberately ITPM only, no Admin bypass,
   // unlike every other requires*Access flag in this file.
   { to: "/cr-planner", label: "CR Planner", icon: CalendarRange, requiresItpmOnlyAccess: true },
+  // Same audience as CR Planner, plus Admin (read-only, same as every
+  // other requires*Access flag except CR Planner's own ITPM-only rule) —
+  // a calendar view derived entirely from cr_planner data.
+  {
+    to: "/planner-calendar",
+    label: "Planner Calendar",
+    icon: CalendarDays,
+    requiresPlannerCalendarAccess: true,
+  },
   {
     to: "/test-case-upload",
     label: "Test Case Upload",
@@ -99,6 +109,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   // CR Planner: ITPM only, deliberately excluding Admin — matches the
   // spec's "Visible only for ITPM users" literally.
   const canSeePlanner = role === "ITPM";
+  // Planner Calendar: ITPM + Admin (read-only), unlike CR Planner itself.
+  const canSeePlannerCalendar = isAdmin || role === "ITPM";
   // Persisted across navigations (AppShell remounts per route) and reloads
   // via localStorage — this is a pure UI preference, no reason to round-trip
   // it through the backend.
@@ -183,6 +195,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             if ("requiresSecurityReportAccess" in item && !canSeeSecurityReport) return null;
             if ("requiresDeploymentAccess" in item && !canSeeDeployment) return null;
             if ("requiresItpmOnlyAccess" in item && !canSeePlanner) return null;
+            if ("requiresPlannerCalendarAccess" in item && !canSeePlannerCalendar) return null;
             if ("hiddenForTester" in item && isTester) return null;
             const Icon = item.icon;
             const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);

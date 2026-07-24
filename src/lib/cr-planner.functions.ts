@@ -1,11 +1,12 @@
 // CR Planner — standalone Dev/SIT/UAT/Production timeline planning for
 // ITPM. Deliberately independent of every other module: crs is read-only
-// reference data here (never written to), and this shares no table with
-// Deployment Management (deployment_schedule, cr_deployment_mapping,
-// etc.) — "Deployment Master" for this module is its own deployment_master
-// table, not that one. Nothing outside this file imports from it, and it
-// imports nothing from deployment.functions.ts — if this module were
-// deleted, nothing else in the app would need to change.
+// reference data here (never written to), and this imports nothing from
+// deployment.functions.ts — if this module were deleted, nothing else in
+// the app would need to change. One deliberate, explicitly-requested
+// exception: PROD Date options are read (SELECT only, never written) from
+// the Deployment Planning module's deployment_schedule table, filtered to
+// status = 'Planned' — CR Planner has no "add a date" capability of its
+// own, it just mirrors what's already scheduled there.
 import { createServerFn } from "@tanstack/react-start";
 import { requireSessionUser } from "@/lib/gate.functions";
 import { addWorkingDays, toIsoDateKey } from "@/lib/working-days";
@@ -117,12 +118,18 @@ export const listPlannerGrid = createServerFn({ method: "GET" }).handler(async (
   });
 });
 
-export const listDeploymentMasterDates = createServerFn({ method: "GET" }).handler(async () => {
+// PROD Date options — read-only, sourced from the Deployment Planning
+// module's deployment_schedule table (status = 'Planned' only). This is a
+// self-contained copy of the same query deployment.functions.ts's
+// listPlannedSchedules runs, not an import of it, so this file still has
+// zero code-level dependency on deployment.functions.ts.
+export const listPlannedDeploymentDates = createServerFn({ method: "GET" }).handler(async () => {
   await requireSessionUser();
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
-    .from("deployment_master")
-    .select("id, deployment_date, application")
+    .from("deployment_schedule")
+    .select("id, deployment_name, application, deployment_date")
+    .eq("status", "Planned")
     .order("deployment_date", { ascending: true });
   if (error) throw new Error(error.message);
   return data;
@@ -197,13 +204,15 @@ export const updatePlannerEntry = createServerFn({ method: "POST" })
       throw new Error("SIT Start Date is required when SIT Effort is entered");
     }
     if (data.prodDate) {
-      const { data: master, error: masterErr } = await supabaseAdmin
-        .from("deployment_master")
+      const { data: planned, error: plannedErr } = await supabaseAdmin
+        .from("deployment_schedule")
         .select("deployment_date")
         .eq("deployment_date", data.prodDate)
+        .eq("status", "Planned")
         .maybeSingle();
-      if (masterErr) throw new Error(masterErr.message);
-      if (!master) throw new Error("PROD Date must be a date from the Deployment Master list");
+      if (plannedErr) throw new Error(plannedErr.message);
+      if (!planned)
+        throw new Error("PROD Date must be a date from the Deployment Schedule (Planned)");
     }
 
     const devEndDate =
@@ -252,29 +261,4 @@ export const updatePlannerEntry = createServerFn({ method: "POST" })
     }
 
     return { ok: true as const, devEndDate, uatDate };
-  });
-
-export const addDeploymentMasterDate = createServerFn({ method: "POST" })
-  .inputValidator((data: { deploymentDate: string; application?: string | null }) => data)
-  .handler(async ({ data }) => {
-    const { userName } = await assertPlannerActor();
-    if (!data.deploymentDate) throw new Error("Deployment date is required");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    const { data: existing, error: existingErr } = await supabaseAdmin
-      .from("deployment_master")
-      .select("id")
-      .eq("deployment_date", data.deploymentDate)
-      .maybeSingle();
-    if (existingErr) throw new Error(existingErr.message);
-    if (existing) throw new Error("This date is already in the Deployment Master list");
-
-    const { error } = await supabaseAdmin.from("deployment_master").insert({
-      deployment_date: data.deploymentDate,
-      application: data.application?.trim() || null,
-      created_by: userName,
-    } as never);
-    if (error) throw new Error(error.message);
-
-    return { ok: true as const };
   });

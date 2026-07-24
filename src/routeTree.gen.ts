@@ -16,6 +16,7 @@ import { Route as TestCaseUploadRouteImport } from './routes/test-case-upload'
 import { Route as TestCaseApprovalRouteImport } from './routes/test-case-approval'
 import { Route as TatLogicRouteImport } from './routes/tat-logic'
 import { Route as SecurityReportRouteImport } from './routes/security-report'
+import { Route as PlannerCalendarRouteImport } from './routes/planner-calendar'
 import { Route as KpisRouteImport } from './routes/kpis'
 import { Route as DeploymentPlanningRouteImport } from './routes/deployment-planning'
 import { Route as DefectStatusesRouteImport } from './routes/defect-statuses'
@@ -61,6 +62,11 @@ const TatLogicRoute = TatLogicRouteImport.update({
 const SecurityReportRoute = SecurityReportRouteImport.update({
   id: '/security-report',
   path: '/security-report',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlannerCalendarRoute = PlannerCalendarRouteImport.update({
+  id: '/planner-calendar',
+  path: '/planner-calendar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const KpisRoute = KpisRouteImport.update({
@@ -129,6 +135,7 @@ export interface FileRoutesByFullPath {
   '/defect-statuses': typeof DefectStatusesRoute
   '/deployment-planning': typeof DeploymentPlanningRoute
   '/kpis': typeof KpisRoute
+  '/planner-calendar': typeof PlannerCalendarRoute
   '/security-report': typeof SecurityReportRoute
   '/tat-logic': typeof TatLogicRoute
   '/test-case-approval': typeof TestCaseApprovalRoute
@@ -149,6 +156,7 @@ export interface FileRoutesByTo {
   '/defect-statuses': typeof DefectStatusesRoute
   '/deployment-planning': typeof DeploymentPlanningRoute
   '/kpis': typeof KpisRoute
+  '/planner-calendar': typeof PlannerCalendarRoute
   '/security-report': typeof SecurityReportRoute
   '/tat-logic': typeof TatLogicRoute
   '/test-case-approval': typeof TestCaseApprovalRoute
@@ -170,6 +178,7 @@ export interface FileRoutesById {
   '/defect-statuses': typeof DefectStatusesRoute
   '/deployment-planning': typeof DeploymentPlanningRoute
   '/kpis': typeof KpisRoute
+  '/planner-calendar': typeof PlannerCalendarRoute
   '/security-report': typeof SecurityReportRoute
   '/tat-logic': typeof TatLogicRoute
   '/test-case-approval': typeof TestCaseApprovalRoute
@@ -192,6 +201,7 @@ export interface FileRouteTypes {
     | '/defect-statuses'
     | '/deployment-planning'
     | '/kpis'
+    | '/planner-calendar'
     | '/security-report'
     | '/tat-logic'
     | '/test-case-approval'
@@ -212,6 +222,7 @@ export interface FileRouteTypes {
     | '/defect-statuses'
     | '/deployment-planning'
     | '/kpis'
+    | '/planner-calendar'
     | '/security-report'
     | '/tat-logic'
     | '/test-case-approval'
@@ -232,6 +243,7 @@ export interface FileRouteTypes {
     | '/defect-statuses'
     | '/deployment-planning'
     | '/kpis'
+    | '/planner-calendar'
     | '/security-report'
     | '/tat-logic'
     | '/test-case-approval'
@@ -253,6 +265,7 @@ export interface RootRouteChildren {
   DefectStatusesRoute: typeof DefectStatusesRoute
   DeploymentPlanningRoute: typeof DeploymentPlanningRoute
   KpisRoute: typeof KpisRoute
+  PlannerCalendarRoute: typeof PlannerCalendarRoute
   SecurityReportRoute: typeof SecurityReportRoute
   TatLogicRoute: typeof TatLogicRoute
   TestCaseApprovalRoute: typeof TestCaseApprovalRoute
@@ -312,6 +325,13 @@ declare module '@tanstack/react-router' {
       path: '/security-report'
       fullPath: '/security-report'
       preLoaderRoute: typeof SecurityReportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/planner-calendar': {
+      id: '/planner-calendar'
+      path: '/planner-calendar'
+      fullPath: '/planner-calendar'
+      preLoaderRoute: typeof PlannerCalendarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/kpis': {
@@ -414,6 +434,7 @@ const rootRouteChildren: RootRouteChildren = {
   DefectStatusesRoute: DefectStatusesRoute,
   DeploymentPlanningRoute: DeploymentPlanningRoute,
   KpisRoute: KpisRoute,
+  PlannerCalendarRoute: PlannerCalendarRoute,
   SecurityReportRoute: SecurityReportRoute,
   TatLogicRoute: TatLogicRoute,
   TestCaseApprovalRoute: TestCaseApprovalRoute,
