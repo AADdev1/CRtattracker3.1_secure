@@ -7,9 +7,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Plus, Pencil, Trash2, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -53,21 +73,27 @@ const EMPTY: KpiForm = {
 };
 
 function KpiConfigPage() {
-  const { isAdmin } = useAppUser();
+  const { isAdmin, role, isLoading: userLoading } = useAppUser();
   const qc = useQueryClient();
   const [editing, setEditing] = useState<KpiForm | null>(null);
+  // No role and not Admin = no legitimate use for this screen — matches
+  // the server-side assertHasRoleOrAdmin() gate on listKpis/etc.
+  const noRoleBlocked = !userLoading && !isAdmin && role == null;
 
   const kpis = useQuery({
     queryKey: ["kpis"],
     queryFn: () => listKpis(),
+    enabled: !noRoleBlocked,
   });
   const statuses = useQuery({
     queryKey: ["workflow-statuses"],
     queryFn: () => getWorkflowStatuses(),
+    enabled: !noRoleBlocked,
   });
   const excluded = useQuery({
     queryKey: ["kpi-excluded-statuses"],
     queryFn: () => listKpiExcludedStatuses(),
+    enabled: !noRoleBlocked,
   });
 
   const exclByKpi = (() => {
@@ -90,8 +116,7 @@ function KpiConfigPage() {
       setEditing(null);
       toast.success("KPI saved. Engine recalculated.");
     },
-    onError: (e: unknown) =>
-      toast.error(e instanceof Error ? e.message : String(e)),
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : String(e)),
   });
 
   const del = useMutation({
@@ -103,6 +128,22 @@ function KpiConfigPage() {
       toast.success("KPI deleted.");
     },
   });
+
+  if (userLoading) return null;
+  if (noRoleBlocked) {
+    return (
+      <AppShell>
+        <PageHeader title="KPI Configuration" />
+        <PageBody>
+          <Card>
+            <CardContent className="p-12 text-center text-muted-foreground">
+              Your account doesn't have a role assigned yet. Contact an administrator to get access.
+            </CardContent>
+          </Card>
+        </PageBody>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -158,8 +199,12 @@ function KpiConfigPage() {
                     <TableCell className="text-xs">
                       <Badge variant="outline">{(k as { role?: string }).role ?? "ITPM"}</Badge>
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{k.start_status_code}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{k.end_status_code}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {k.start_status_code}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {k.end_status_code}
+                    </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {(exclByKpi.get(k.id)?.length ?? 0) === 0
                         ? "—"
@@ -221,7 +266,11 @@ function KpiConfigPage() {
 }
 
 function KpiDialog({
-  form, statuses, onChange, onSave, saving,
+  form,
+  statuses,
+  onChange,
+  onSave,
+  saving,
 }: {
   form: KpiForm;
   statuses: { code: string; label: string }[];
@@ -255,7 +304,9 @@ function KpiDialog({
         <div>
           <Label>Role</Label>
           <Select value={form.role} onValueChange={(v) => set("role", v as "ITPM" | "BA")}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="ITPM">ITPM</SelectItem>
               <SelectItem value="BA">BA</SelectItem>
@@ -265,28 +316,71 @@ function KpiDialog({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label>Start Status</Label>
-            <Select value={form.start_status_code} onValueChange={(v) => set("start_status_code", v)}>
-              <SelectTrigger><SelectValue placeholder="Pick a status" /></SelectTrigger>
+            <Select
+              value={form.start_status_code}
+              onValueChange={(v) => set("start_status_code", v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Pick a status" />
+              </SelectTrigger>
               <SelectContent className="max-h-72">
-                {statuses.map((s) => <SelectItem key={s.code} value={s.code}>{s.label}</SelectItem>)}
+                {statuses.map((s) => (
+                  <SelectItem key={s.code} value={s.code}>
+                    {s.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div>
             <Label>End Status</Label>
             <Select value={form.end_status_code} onValueChange={(v) => set("end_status_code", v)}>
-              <SelectTrigger><SelectValue placeholder="Pick a status" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Pick a status" />
+              </SelectTrigger>
               <SelectContent className="max-h-72">
-                {statuses.map((s) => <SelectItem key={s.code} value={s.code}>{s.label}</SelectItem>)}
+                {statuses.map((s) => (
+                  <SelectItem key={s.code} value={s.code}>
+                    {s.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         </div>
         <div className="grid grid-cols-4 gap-3">
-          <div><Label>Small TAT</Label><Input type="number" value={form.small_tat} onChange={(e) => set("small_tat", Number(e.target.value))} /></div>
-          <div><Label>Medium TAT</Label><Input type="number" value={form.medium_tat} onChange={(e) => set("medium_tat", Number(e.target.value))} /></div>
-          <div><Label>Large TAT</Label><Input type="number" value={form.large_tat} onChange={(e) => set("large_tat", Number(e.target.value))} /></div>
-          <div><Label>Warn %</Label><Input type="number" value={form.warning_pct} onChange={(e) => set("warning_pct", Number(e.target.value))} /></div>
+          <div>
+            <Label>Small TAT</Label>
+            <Input
+              type="number"
+              value={form.small_tat}
+              onChange={(e) => set("small_tat", Number(e.target.value))}
+            />
+          </div>
+          <div>
+            <Label>Medium TAT</Label>
+            <Input
+              type="number"
+              value={form.medium_tat}
+              onChange={(e) => set("medium_tat", Number(e.target.value))}
+            />
+          </div>
+          <div>
+            <Label>Large TAT</Label>
+            <Input
+              type="number"
+              value={form.large_tat}
+              onChange={(e) => set("large_tat", Number(e.target.value))}
+            />
+          </div>
+          <div>
+            <Label>Warn %</Label>
+            <Input
+              type="number"
+              value={form.warning_pct}
+              onChange={(e) => set("warning_pct", Number(e.target.value))}
+            />
+          </div>
         </div>
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -323,10 +417,7 @@ function KpiDialog({
                     key={s.code}
                     className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm"
                   >
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={() => toggleExcluded(s.code)}
-                    />
+                    <Checkbox checked={checked} onCheckedChange={() => toggleExcluded(s.code)} />
                     <span>{s.label}</span>
                   </label>
                 );

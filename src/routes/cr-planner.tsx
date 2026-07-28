@@ -106,9 +106,9 @@ type PlannerGridRow = Awaited<ReturnType<typeof listPlannerGrid>>[number];
 const EMPTY_ROWS: PlannerGridRow[] = [];
 
 function CrPlannerPage() {
-  const { role, isLoading } = useAppUser();
+  const { role, isAdmin, isLoading } = useAppUser();
   const navigate = useNavigate();
-  const canAccess = role === "ITPM";
+  const canAccess = role === "ITPM" || isAdmin;
 
   useEffect(() => {
     if (!isLoading && !canAccess) navigate({ to: "/" });
@@ -116,10 +116,13 @@ function CrPlannerPage() {
 
   if (isLoading || !canAccess) return null;
 
-  return <CrPlannerView />;
+  // Admin gets the app-wide "read-only everywhere" baseline — view the
+  // grid, no Add/edit controls. Writes stay ITPM-only server-side in
+  // assertPlannerActor regardless of what the UI shows.
+  return <CrPlannerView canEdit={role === "ITPM"} />;
 }
 
-function CrPlannerView() {
+function CrPlannerView({ canEdit }: { canEdit: boolean }) {
   const qc = useQueryClient();
   const listActiveFn = useServerFn(listActiveCrsForPlanner);
   const addToPlannerFn = useServerFn(addCrsToPlanner);
@@ -133,9 +136,13 @@ function CrPlannerView() {
   const [sortKey, setSortKey] = useState<SortKey>("dateModified");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
+  // Only needed for the Active CR Selection / Add To Planner flow, which
+  // is hidden entirely for Admin — no point firing an ITPM-only-gated
+  // request (assertPlannerActor) that would just 403.
   const activeCrs = useQuery({
     queryKey: ["cr-planner-active-crs"],
     queryFn: () => listActiveFn(),
+    enabled: canEdit,
   });
 
   const grid = useQuery({
@@ -144,10 +151,12 @@ function CrPlannerView() {
   });
 
   // Read-only — mirrors the Deployment Planning module's Planned
-  // schedules, no add/write capability from this page.
+  // schedules, no add/write capability from this page. Only needed to
+  // populate the PROD Date dropdown, which Admin never sees.
   const plannedDates = useQuery({
     queryKey: ["cr-planner-planned-dates"],
     queryFn: () => listPlannedDatesFn(),
+    enabled: canEdit,
   });
 
   const addToPlanner = useMutation({
@@ -264,54 +273,56 @@ function CrPlannerView() {
         description="Plan Development, SIT, UAT, and Production timelines for active CRs."
       />
       <PageBody>
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <div className="text-sm font-medium">Active CR Selection</div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-96 justify-between font-normal">
-                    {selected.size > 0
-                      ? `${selected.size} CR(s) selected`
-                      : "Search and select active CRs…"}
-                    <ChevronsUpDown className="size-4 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-96 p-0">
-                  <Command>
-                    <CommandInput placeholder="Search CR number or title…" />
-                    <CommandList>
-                      <CommandEmpty>No active CRs found.</CommandEmpty>
-                      <CommandGroup>
-                        {(activeCrs.data ?? []).map((c) => (
-                          <CommandItem
-                            key={c.cr_number}
-                            value={`${c.cr_number} ${c.title ?? ""}`}
-                            onSelect={() => toggleSelected(c.cr_number)}
-                          >
-                            <Check
-                              className={cn(
-                                "size-4",
-                                selected.has(c.cr_number) ? "opacity-100" : "opacity-0",
-                              )}
-                            />
-                            {c.cr_number} - {c.title ?? "(untitled)"}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              <Button
-                disabled={selected.size === 0 || addToPlanner.isPending}
-                onClick={() => addToPlanner.mutate(Array.from(selected))}
-              >
-                {addToPlanner.isPending ? "Adding…" : "Add To Planner"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {canEdit && (
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <div className="text-sm font-medium">Active CR Selection</div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-96 justify-between font-normal">
+                      {selected.size > 0
+                        ? `${selected.size} CR(s) selected`
+                        : "Search and select active CRs…"}
+                      <ChevronsUpDown className="size-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-96 p-0">
+                    <Command>
+                      <CommandInput placeholder="Search CR number or title…" />
+                      <CommandList>
+                        <CommandEmpty>No active CRs found.</CommandEmpty>
+                        <CommandGroup>
+                          {(activeCrs.data ?? []).map((c) => (
+                            <CommandItem
+                              key={c.cr_number}
+                              value={`${c.cr_number} ${c.title ?? ""}`}
+                              onSelect={() => toggleSelected(c.cr_number)}
+                            >
+                              <Check
+                                className={cn(
+                                  "size-4",
+                                  selected.has(c.cr_number) ? "opacity-100" : "opacity-0",
+                                )}
+                              />
+                              {c.cr_number} - {c.title ?? "(untitled)"}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <Button
+                  disabled={selected.size === 0 || addToPlanner.isPending}
+                  onClick={() => addToPlanner.mutate(Array.from(selected))}
+                >
+                  {addToPlanner.isPending ? "Adding…" : "Add To Planner"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardContent className="p-4 flex flex-wrap items-center gap-3">
@@ -369,6 +380,7 @@ function CrPlannerView() {
                     key={row.crNumber}
                     row={row}
                     plannedDates={plannedDates.data ?? []}
+                    canEdit={canEdit}
                   />
                 ))}
                 {paged.length === 0 && (
@@ -420,6 +432,7 @@ function CrPlannerView() {
 function PlannerGridRowView({
   row,
   plannedDates,
+  canEdit,
 }: {
   row: PlannerGridRow;
   plannedDates: {
@@ -428,6 +441,7 @@ function PlannerGridRowView({
     application: string | null;
     deployment_date: string;
   }[];
+  canEdit: boolean;
 }) {
   const qc = useQueryClient();
   const updateFn = useServerFn(updatePlannerEntry);
@@ -490,78 +504,92 @@ function PlannerGridRowView({
       </TableCell>
 
       <TableCell>
-        <Select
-          value={devResource || undefined}
-          onValueChange={(v) => {
-            setDevResource(v);
-            update.mutate({ devResource: v });
-          }}
-        >
-          <SelectTrigger className="w-20 h-8">
-            <SelectValue placeholder="—" />
-          </SelectTrigger>
-          <SelectContent>
-            {DEV_RESOURCES.map((r) => (
-              <SelectItem key={r} value={r}>
-                {r}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {canEdit ? (
+          <Select
+            value={devResource || undefined}
+            onValueChange={(v) => {
+              setDevResource(v);
+              update.mutate({ devResource: v });
+            }}
+          >
+            <SelectTrigger className="w-20 h-8">
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              {DEV_RESOURCES.map((r) => (
+                <SelectItem key={r} value={r}>
+                  {r}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          devResource || "—"
+        )}
       </TableCell>
 
       <TableCell>
-        <Input
-          type="number"
-          min={1}
-          className="w-20 h-8"
-          value={devEffort}
-          onChange={(e) => setDevEffort(e.target.value)}
-          onBlur={() => {
-            if ((row.devEffort != null ? String(row.devEffort) : "") !== devEffort)
-              update.mutate({});
-          }}
-        />
+        {canEdit ? (
+          <Input
+            type="number"
+            min={1}
+            className="w-20 h-8"
+            value={devEffort}
+            onChange={(e) => setDevEffort(e.target.value)}
+            onBlur={() => {
+              if ((row.devEffort != null ? String(row.devEffort) : "") !== devEffort)
+                update.mutate({});
+            }}
+          />
+        ) : (
+          devEffort || "—"
+        )}
       </TableCell>
 
       <TableCell>
-        <div className="flex items-center gap-1">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="w-32 justify-start font-normal">
-                {devStartDate ? format(devStartDate, "dd-MMM-yyyy") : "—"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={devStartDate}
-                onSelect={(d) => {
-                  setDevStartDate(d);
-                  update.mutate({ devStartDate: d ? format(d, "yyyy-MM-dd") : null });
+        {canEdit ? (
+          <div className="flex items-center gap-1">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="w-32 justify-start font-normal">
+                  {devStartDate ? format(devStartDate, "dd-MMM-yyyy") : "—"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={devStartDate}
+                  onSelect={(d) => {
+                    setDevStartDate(d);
+                    update.mutate({ devStartDate: d ? format(d, "yyyy-MM-dd") : null });
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+            {devStartDate && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 shrink-0"
+                title="Clear date"
+                onClick={() => {
+                  // Effort without a start date can't compute an end date, and
+                  // fails the "Dev Start Date required if Dev Effort entered"
+                  // rule server-side — clear both together, not just the date.
+                  setDevStartDate(undefined);
+                  setDevEffort("");
+                  update.mutate({ devStartDate: null, devEffort: null });
                 }}
-              />
-            </PopoverContent>
-          </Popover>
-          {devStartDate && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6 shrink-0"
-              title="Clear date"
-              onClick={() => {
-                // Effort without a start date can't compute an end date, and
-                // fails the "Dev Start Date required if Dev Effort entered"
-                // rule server-side — clear both together, not just the date.
-                setDevStartDate(undefined);
-                setDevEffort("");
-                update.mutate({ devStartDate: null, devEffort: null });
-              }}
-            >
-              <X className="size-3" />
-            </Button>
-          )}
-        </div>
+              >
+                <X className="size-3" />
+              </Button>
+            )}
+          </div>
+        ) : devStartDate ? (
+          format(devStartDate, "dd-MMM-yyyy")
+        ) : (
+          "—"
+        )}
       </TableCell>
 
       <TableCell className="bg-muted text-xs whitespace-nowrap">
@@ -569,57 +597,67 @@ function PlannerGridRowView({
       </TableCell>
 
       <TableCell>
-        <Input
-          type="number"
-          min={1}
-          className="w-20 h-8"
-          value={sitEffort}
-          onChange={(e) => setSitEffort(e.target.value)}
-          onBlur={() => {
-            if ((row.sitEffort != null ? String(row.sitEffort) : "") !== sitEffort)
-              update.mutate({});
-          }}
-        />
+        {canEdit ? (
+          <Input
+            type="number"
+            min={1}
+            className="w-20 h-8"
+            value={sitEffort}
+            onChange={(e) => setSitEffort(e.target.value)}
+            onBlur={() => {
+              if ((row.sitEffort != null ? String(row.sitEffort) : "") !== sitEffort)
+                update.mutate({});
+            }}
+          />
+        ) : (
+          sitEffort || "—"
+        )}
       </TableCell>
 
       <TableCell>
-        <div className="flex items-center gap-1">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="w-32 justify-start font-normal">
-                {sitStartDate ? format(sitStartDate, "dd-MMM-yyyy") : "—"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={sitStartDate}
-                onSelect={(d) => {
-                  setSitStartDate(d);
-                  update.mutate({ sitStartDate: d ? format(d, "yyyy-MM-dd") : null });
+        {canEdit ? (
+          <div className="flex items-center gap-1">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="w-32 justify-start font-normal">
+                  {sitStartDate ? format(sitStartDate, "dd-MMM-yyyy") : "—"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={sitStartDate}
+                  onSelect={(d) => {
+                    setSitStartDate(d);
+                    update.mutate({ sitStartDate: d ? format(d, "yyyy-MM-dd") : null });
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+            {sitStartDate && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 shrink-0"
+                title="Clear date"
+                onClick={() => {
+                  // Same reasoning as Dev Start Date's clear button — clear
+                  // the paired effort too, or the server's "SIT Start Date
+                  // required if SIT Effort entered" rule rejects it.
+                  setSitStartDate(undefined);
+                  setSitEffort("");
+                  update.mutate({ sitStartDate: null, sitEffort: null });
                 }}
-              />
-            </PopoverContent>
-          </Popover>
-          {sitStartDate && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6 shrink-0"
-              title="Clear date"
-              onClick={() => {
-                // Same reasoning as Dev Start Date's clear button — clear
-                // the paired effort too, or the server's "SIT Start Date
-                // required if SIT Effort entered" rule rejects it.
-                setSitStartDate(undefined);
-                setSitEffort("");
-                update.mutate({ sitStartDate: null, sitEffort: null });
-              }}
-            >
-              <X className="size-3" />
-            </Button>
-          )}
-        </div>
+              >
+                <X className="size-3" />
+              </Button>
+            )}
+          </div>
+        ) : sitStartDate ? (
+          format(sitStartDate, "dd-MMM-yyyy")
+        ) : (
+          "—"
+        )}
       </TableCell>
 
       <TableCell className="bg-muted text-xs whitespace-nowrap">
@@ -627,53 +665,63 @@ function PlannerGridRowView({
       </TableCell>
 
       <TableCell>
-        <div className="flex items-center gap-1">
-          <Select
-            value={prodDate || undefined}
-            onValueChange={(v) => {
-              setProdDate(v);
-              update.mutate({ prodDate: v });
-            }}
-          >
-            <SelectTrigger className="w-36 h-8">
-              <SelectValue placeholder="Pick date…" />
-            </SelectTrigger>
-            <SelectContent>
-              {plannedDates.map((d) => (
-                <SelectItem key={d.id} value={d.deployment_date}>
-                  {fmtDate(d.deployment_date)} — {d.deployment_name}
-                  {d.application ? ` (${d.application})` : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {prodDate && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6 shrink-0"
-              title="Clear date"
-              onClick={() => {
-                setProdDate("");
-                update.mutate({ prodDate: null });
+        {canEdit ? (
+          <div className="flex items-center gap-1">
+            <Select
+              value={prodDate || undefined}
+              onValueChange={(v) => {
+                setProdDate(v);
+                update.mutate({ prodDate: v });
               }}
             >
-              <X className="size-3" />
-            </Button>
-          )}
-        </div>
+              <SelectTrigger className="w-36 h-8">
+                <SelectValue placeholder="Pick date…" />
+              </SelectTrigger>
+              <SelectContent>
+                {plannedDates.map((d) => (
+                  <SelectItem key={d.id} value={d.deployment_date}>
+                    {fmtDate(d.deployment_date)} — {d.deployment_name}
+                    {d.application ? ` (${d.application})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {prodDate && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 shrink-0"
+                title="Clear date"
+                onClick={() => {
+                  setProdDate("");
+                  update.mutate({ prodDate: null });
+                }}
+              >
+                <X className="size-3" />
+              </Button>
+            )}
+          </div>
+        ) : prodDate ? (
+          fmtDate(prodDate)
+        ) : (
+          "—"
+        )}
       </TableCell>
 
       <TableCell>
-        <Textarea
-          className="min-w-40"
-          rows={1}
-          value={remarks}
-          onChange={(e) => setRemarks(e.target.value)}
-          onBlur={() => {
-            if ((row.remarks ?? "") !== remarks) update.mutate({});
-          }}
-        />
+        {canEdit ? (
+          <Textarea
+            className="min-w-40"
+            rows={1}
+            value={remarks}
+            onChange={(e) => setRemarks(e.target.value)}
+            onBlur={() => {
+              if ((row.remarks ?? "") !== remarks) update.mutate({});
+            }}
+          />
+        ) : (
+          remarks || "—"
+        )}
       </TableCell>
 
       <TableCell className="text-xs whitespace-nowrap">{fmtTimestamp(row.dateCreated)}</TableCell>

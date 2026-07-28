@@ -2,7 +2,7 @@
 // writes are Admin-only. RLS is locked down, so these go through the
 // service-role client now instead of the anon client.
 import { createServerFn } from "@tanstack/react-start";
-import { requireSessionUser } from "@/lib/gate.functions";
+import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
 
 async function assertAdmin() {
   const { isAdmin } = await requireSessionUser();
@@ -10,7 +10,7 @@ async function assertAdmin() {
 }
 
 export const listDefectStatusMapping = createServerFn({ method: "GET" }).handler(async () => {
-  await requireSessionUser();
+  assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("defect_status_mapping")
@@ -22,7 +22,7 @@ export const listDefectStatusMapping = createServerFn({ method: "GET" }).handler
 });
 
 export const listUnmappedDefectStatuses = createServerFn({ method: "GET" }).handler(async () => {
-  await requireSessionUser();
+  assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin.from("defects").select("new_status");
   if (error) throw new Error(error.message);

@@ -5,7 +5,7 @@
 // (per Phase 1 spec). Multiple hold→resume cycles are supported.
 // =============================================================================
 import { createServerFn } from "@tanstack/react-start";
-import { requireSessionUser } from "@/lib/gate.functions";
+import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
 
 export type CrSize = "Small" | "Medium" | "Large";
 export type KpiStatusValue = "pending" | "not_started" | "green" | "amber" | "red";
@@ -224,7 +224,9 @@ async function acquireKpiEngineLock(supabaseAdmin: any): Promise<void> {
     .select("id");
   if (error) throw new Error(error.message);
   if (!claimed || claimed.length === 0) {
-    throw new Error("The KPI engine is already running from another request. Please try again shortly.");
+    throw new Error(
+      "The KPI engine is already running from another request. Please try again shortly.",
+    );
   }
 }
 
@@ -254,7 +256,9 @@ export const recalculateAllKpis = createServerFn({ method: "POST" }).handler(
     kpisProcessed: number;
     resultsWritten: number;
   }> => {
-    const { userName, isAdmin } = await requireSessionUser();
+    const session = await requireSessionUser();
+    assertHasRoleOrAdmin(session);
+    const { userName, isAdmin } = session;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await acquireKpiEngineLock(supabaseAdmin);
     try {
@@ -326,15 +330,14 @@ export const recalculateAllKpis = createServerFn({ method: "POST" }).handler(
 export const recalculateForCr = createServerFn({ method: "POST" })
   .inputValidator((crNumber: string) => crNumber)
   .handler(async ({ data: crNumber }): Promise<void> => {
-    await requireSessionUser();
+    assertHasRoleOrAdmin(await requireSessionUser());
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const [{ data: statuses }, { data: kpis }, { data: cr }, { data: excl }] =
-      await Promise.all([
-        supabaseAdmin.from("workflow_statuses").select("*").order("sort_order"),
-        supabaseAdmin.from("kpis").select("*").eq("is_active", true),
-        supabaseAdmin.from("crs").select("*").eq("cr_number", crNumber).maybeSingle(),
-        supabaseAdmin.from("kpi_excluded_statuses").select("kpi_id, workflow_status_code"),
-      ]);
+    const [{ data: statuses }, { data: kpis }, { data: cr }, { data: excl }] = await Promise.all([
+      supabaseAdmin.from("workflow_statuses").select("*").order("sort_order"),
+      supabaseAdmin.from("kpis").select("*").eq("is_active", true),
+      supabaseAdmin.from("crs").select("*").eq("cr_number", crNumber).maybeSingle(),
+      supabaseAdmin.from("kpi_excluded_statuses").select("kpi_id, workflow_status_code"),
+    ]);
     if (!statuses || !kpis || !cr) return;
 
     await supabaseAdmin.from("kpi_results").delete().eq("cr_number", crNumber);
@@ -343,7 +346,10 @@ export const recalculateForCr = createServerFn({ method: "POST" })
     if ((cr as unknown as CrRow).is_dropped) return;
 
     const exclByKpi = groupExcluded(excl ?? []);
-    const timeline = buildTimeline(cr as unknown as CrRow, statuses as unknown as WorkflowStatusRow[]);
+    const timeline = buildTimeline(
+      cr as unknown as CrRow,
+      statuses as unknown as WorkflowStatusRow[],
+    );
     const results = (kpis as unknown as KpiRow[]).map((k) =>
       calcKpi(cr as unknown as CrRow, k, timeline, exclByKpi.get(k.id) ?? new Set()),
     );

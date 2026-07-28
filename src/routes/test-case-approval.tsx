@@ -26,8 +26,10 @@ const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString() : "—")
 
 function TestCaseApprovalPage() {
   const navigate = useNavigate();
-  const { isAdmin, isTestCaseApprover, isLoading: userLoading } = useAppUser();
-  const canAccess = isAdmin || isTestCaseApprover;
+  const { isAdmin, role, isTestCaseApprover, isLoading: userLoading } = useAppUser();
+  // A no-role account can't use the approver flag alone to get in — it's
+  // only meaningful paired with an actual staff role.
+  const canAccess = isAdmin || (role != null && isTestCaseApprover);
 
   useEffect(() => {
     if (!userLoading && !canAccess) navigate({ to: "/" });

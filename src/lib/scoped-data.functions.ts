@@ -13,7 +13,7 @@
 // inside each handler so client.server.ts never gets pulled into the client
 // bundle (this file is reachable from route components).
 import { createServerFn } from "@tanstack/react-start";
-import { requireSessionUser } from "@/lib/gate.functions";
+import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
 import type { Database } from "@/integrations/supabase/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -69,7 +69,9 @@ async function loadScopedCrs(
 export const getScopedCrs = createServerFn({ method: "GET" })
   .inputValidator((data: ScopedInput | undefined) => data ?? {})
   .handler(async ({ data }) => {
-    const { userName, isAdmin, spocApplications } = await requireSessionUser();
+    const session = await requireSessionUser();
+    assertHasRoleOrAdmin(session);
+    const { userName, isAdmin, spocApplications } = session;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const scoped = await loadScopedCrs(
       supabaseAdmin,
@@ -96,7 +98,9 @@ function roleAllowedForRelation(role: string | undefined, relation: CrRelation):
 export const getScopedKpiResults = createServerFn({ method: "GET" })
   .inputValidator((data: ScopedInput | undefined) => data ?? {})
   .handler(async ({ data }) => {
-    const { userName, isAdmin, spocApplications } = await requireSessionUser();
+    const session = await requireSessionUser();
+    assertHasRoleOrAdmin(session);
+    const { userName, isAdmin, spocApplications } = session;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const scoped = await loadScopedCrs(
       supabaseAdmin,
@@ -135,7 +139,9 @@ export const getScopedKpiResults = createServerFn({ method: "GET" })
 export const getScopedDefects = createServerFn({ method: "GET" })
   .inputValidator((data: ScopedInput | undefined) => data ?? {})
   .handler(async ({ data }) => {
-    const { userName, isAdmin, spocApplications } = await requireSessionUser();
+    const session = await requireSessionUser();
+    assertHasRoleOrAdmin(session);
+    const { userName, isAdmin, spocApplications } = session;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const scoped = await loadScopedCrs(
       supabaseAdmin,

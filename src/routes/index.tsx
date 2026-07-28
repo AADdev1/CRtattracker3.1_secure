@@ -7,7 +7,11 @@ import { KpiStatusBadge } from "@/components/kpi-status-badge";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
   Table,
@@ -49,9 +53,13 @@ interface CrListRow {
 }
 
 function Dashboard() {
-  const { isAdmin } = useAppUser();
+  const { isAdmin, role, isLoading: userLoading } = useAppUser();
   const [userFilter, setUserFilter] = useState("__all__");
   const [appFilter, setAppFilter] = useState("__all__");
+  // No role and not Admin = no legitimate use for any screen in this app —
+  // matches the server-side assertHasRoleOrAdmin() gate on getScopedCrs
+  // etc. Skip firing those (now-rejected) requests entirely.
+  const noRoleBlocked = !userLoading && !isAdmin && role == null;
 
   const raw = useQuery({
     queryKey: ["dashboard-raw"],
@@ -64,9 +72,13 @@ function Dashboard() {
       return {
         crList: crs as unknown as CrListRow[],
         allResults: results as unknown as ResultRow[],
-        openDefectsList: openDefectsList as unknown as { cr_number: string; date_created: string | null }[],
+        openDefectsList: openDefectsList as unknown as {
+          cr_number: string;
+          date_created: string | null;
+        }[],
       };
     },
+    enabled: !noRoleBlocked,
   });
 
   const userOpts = useMemo(() => {
@@ -154,6 +166,23 @@ function Dashboard() {
     };
   }, [raw.data, userFilter, appFilter]);
 
+  if (userLoading) return null;
+
+  if (noRoleBlocked) {
+    return (
+      <AppShell>
+        <PageHeader title="Dashboard" />
+        <PageBody>
+          <Card>
+            <CardContent className="p-12 text-center text-muted-foreground">
+              Your account doesn't have a role assigned yet. Contact an administrator to get access.
+            </CardContent>
+          </Card>
+        </PageBody>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       <PageHeader
@@ -169,19 +198,30 @@ function Dashboard() {
                 label="User"
                 value={userFilter}
                 setValue={setUserFilter}
-                options={[{ v: "__all__", l: "All users" }, ...userOpts.map((u) => ({ v: u, l: u }))]}
+                options={[
+                  { v: "__all__", l: "All users" },
+                  ...userOpts.map((u) => ({ v: u, l: u })),
+                ]}
               />
               <Filter
                 label="Application"
                 value={appFilter}
                 setValue={setAppFilter}
-                options={[{ v: "__all__", l: "All applications" }, ...appOpts.map((a) => ({ v: a, l: a }))]}
+                options={[
+                  { v: "__all__", l: "All applications" },
+                  ...appOpts.map((a) => ({ v: a, l: a })),
+                ]}
               />
             </CardContent>
           </Card>
         )}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          <StatCard label="Active CRs" value={s?.activeCrs ?? 0} icon={<Database className="size-4" />} to="/crs" />
+          <StatCard
+            label="Active CRs"
+            value={s?.activeCrs ?? 0}
+            icon={<Database className="size-4" />}
+            to="/crs"
+          />
           <StatCard
             label="Pending CR Size"
             value={s?.pendingSize ?? 0}
@@ -189,9 +229,30 @@ function Dashboard() {
             tone={s?.pendingSize ? "amber" : "muted"}
             to="/cr-sizes"
           />
-          <StatCard label="Green KPIs" value={s?.counts.green ?? 0} icon={<CircleCheck className="size-4" />} tone="green" to="/worklist" search={{ status: "green" }} />
-          <StatCard label="Amber KPIs" value={s?.counts.amber ?? 0} icon={<CircleAlert className="size-4" />} tone="amber" to="/worklist" search={{ status: "amber" }} />
-          <StatCard label="Red KPIs" value={s?.counts.red ?? 0} icon={<AlertTriangle className="size-4" />} tone="red" to="/worklist" search={{ status: "red" }} />
+          <StatCard
+            label="Green KPIs"
+            value={s?.counts.green ?? 0}
+            icon={<CircleCheck className="size-4" />}
+            tone="green"
+            to="/worklist"
+            search={{ status: "green" }}
+          />
+          <StatCard
+            label="Amber KPIs"
+            value={s?.counts.amber ?? 0}
+            icon={<CircleAlert className="size-4" />}
+            tone="amber"
+            to="/worklist"
+            search={{ status: "amber" }}
+          />
+          <StatCard
+            label="Red KPIs"
+            value={s?.counts.red ?? 0}
+            icon={<AlertTriangle className="size-4" />}
+            tone="red"
+            to="/worklist"
+            search={{ status: "red" }}
+          />
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCard
@@ -211,7 +272,11 @@ function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <KpiTable title="Near Breach KPIs" rows={s?.nearBreach ?? []} emptyText="No KPIs near breach." />
+          <KpiTable
+            title="Near Breach KPIs"
+            rows={s?.nearBreach ?? []}
+            emptyText="No KPIs near breach."
+          />
           <KpiTable title="Breached KPIs" rows={s?.breached ?? []} emptyText="No breached KPIs." />
         </div>
       </PageBody>
@@ -249,7 +314,13 @@ function StatCard({
     muted: "text-foreground",
   };
   const content = (
-    <Card className={cn("transition-all duration-200 hover:shadow-md hover:-translate-y-0.5", toneCls[tone], to && "cursor-pointer")}>
+    <Card
+      className={cn(
+        "transition-all duration-200 hover:shadow-md hover:-translate-y-0.5",
+        toneCls[tone],
+        to && "cursor-pointer",
+      )}
+    >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           {label}
@@ -272,7 +343,10 @@ function StatCard({
 }
 
 function Filter({
-  label, value, setValue, options,
+  label,
+  value,
+  setValue,
+  options,
 }: {
   label: string;
   value: string;
@@ -283,9 +357,15 @@ function Filter({
     <div className="flex flex-col gap-1">
       <span className="text-xs text-muted-foreground">{label}</span>
       <Select value={value} onValueChange={setValue}>
-        <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="w-56">
+          <SelectValue />
+        </SelectTrigger>
         <SelectContent>
-          {options.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}
+          {options.map((o) => (
+            <SelectItem key={o.v} value={o.v}>
+              {o.l}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
     </div>
@@ -334,14 +414,18 @@ function KpiTable({
                     </Link>
                   </TableCell>
                   <TableCell>{r.kpis?.name ?? "—"}</TableCell>
-                  <TableCell className="text-muted-foreground">{r.crs?.application ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {r.crs?.application ?? "—"}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {r.effective_days ?? "—"} / {r.tat ?? "—"}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {r.utilization_pct != null ? `${r.utilization_pct.toFixed(0)}%` : "—"}
                   </TableCell>
-                  <TableCell><KpiStatusBadge status={r.status} /></TableCell>
+                  <TableCell>
+                    <KpiStatusBadge status={r.status} />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

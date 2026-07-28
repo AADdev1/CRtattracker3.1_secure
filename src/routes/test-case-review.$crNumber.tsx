@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,10 +70,19 @@ const EXECUTION_STATUSES = ["Pending", "Tested", "Defect Raised"] as const;
 function TestCaseReviewPage() {
   const { crNumber } = Route.useParams();
   const qc = useQueryClient();
-  const { isAdmin, role, isTestCaseApprover } = useAppUser();
+  const { isAdmin, role, isTestCaseApprover, isLoading: userLoading } = useAppUser();
+  const navigate = useNavigate();
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [sendBackComment, setSendBackComment] = useState("");
   const [draftExecutionStatus, setDraftExecutionStatus] = useState<Record<string, string>>({});
+  // No role and not Admin = no legitimate use for this screen — matches
+  // the server-side assertHasRoleOrAdmin() gate on getCrTestingHeader/
+  // getTestCases.
+  const blocked = !userLoading && !isAdmin && role == null;
+
+  useEffect(() => {
+    if (blocked) navigate({ to: "/" });
+  }, [blocked, navigate]);
 
   const data = useQuery({
     queryKey: ["test-case-review", crNumber],
@@ -84,6 +93,7 @@ function TestCaseReviewPage() {
       ]);
       return { header, rows };
     },
+    enabled: !blocked,
   });
 
   const rows = data.data?.rows ?? [];
@@ -143,6 +153,8 @@ function TestCaseReviewPage() {
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : String(e)),
   });
+
+  if (userLoading || blocked) return null;
 
   if (data.isLoading) {
     return (

@@ -32,9 +32,10 @@ const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/upload", label: "Data Import", icon: Upload, hiddenForTester: true },
   { to: "/crs", label: "CR Repository", icon: Database, hiddenForTester: true },
-  // CR Size Management is a PMO/BA/ITPM function-of-record, not an Admin
-  // one — Admin (without also holding one of those job roles) doesn't get
-  // this link, matching the server-side check in crs-admin.functions.ts.
+  // CR Size Management: PMO/BA/ITPM can edit; Admin gets the app-wide
+  // "read-only everywhere" baseline (view only — the edit controls are
+  // hidden for Admin in cr-sizes.tsx, and writes stay blocked server-side
+  // in crs-admin.functions.ts).
   { to: "/cr-sizes", label: "CR Size Management", icon: Ruler, requiresCrEditAccess: true },
   { to: "/cr-allocation", label: "CR Allocation", icon: UserPlus, requiresAllocationAccess: true },
   // Deployment Management (Phase 4) — PMO/ITPM/BA manage schedules and
@@ -49,13 +50,13 @@ const nav = [
     icon: ClipboardList,
     requiresDeploymentAccess: true,
   },
-  // CR Planner is a standalone, ITPM-exclusive module (see
-  // cr-planner.functions.ts) — deliberately ITPM only, no Admin bypass,
-  // unlike every other requires*Access flag in this file.
+  // CR Planner is a standalone module (see cr-planner.functions.ts). ITPM
+  // can edit; Admin gets the app-wide read-only baseline (view the grid,
+  // no Add/edit controls — see cr-planner.tsx). Editing itself stays
+  // ITPM-only, enforced server-side in assertPlannerActor.
   { to: "/cr-planner", label: "CR Planner", icon: CalendarRange, requiresItpmOnlyAccess: true },
-  // Same audience as CR Planner, plus Admin (read-only, same as every
-  // other requires*Access flag except CR Planner's own ITPM-only rule) —
-  // a calendar view derived entirely from cr_planner data.
+  // Same audience as CR Planner — a calendar view derived entirely from
+  // cr_planner data.
   {
     to: "/planner-calendar",
     label: "Planner Calendar",
@@ -75,7 +76,15 @@ const nav = [
     requiresApproverAccess: true,
   },
   { to: "/kpis", label: "KPI Configuration", icon: Settings2, hiddenForTester: true },
-  { to: "/defect-statuses", label: "Defect Status Mapping", icon: Bug, hiddenForTester: true },
+  // Admin-only in practice (defect-statuses.tsx's page guard is
+  // `!isAdmin` → redirect) — a dedicated flag instead of `hiddenForTester`
+  // so PMO/BA/ITPM don't see a nav link that immediately bounces them.
+  {
+    to: "/defect-statuses",
+    label: "Defect Status Mapping",
+    icon: Bug,
+    requiresAdminOnlyAccess: true,
+  },
   { to: "/worklist", label: "KPI Worklist", icon: ListChecks, hiddenForTester: true },
   { to: "/tat-logic", label: "TAT Calculator Logic", icon: Calculator, hiddenForTester: true },
   // Admin/ITPM only — the real gate is server-side in
@@ -99,18 +108,23 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Test Case Management module.
   const canSeeAllocation = isAdmin || (role != null && role !== "Tester");
   const canSeeTesterNav = isAdmin || role === "Tester";
-  const canSeeApproverNav = isAdmin || isTestCaseApprover;
-  const canSeeCrSizes = role === "PMO" || role === "BA" || role === "ITPM";
+  // A no-role account can't use the approver flag alone to get in — it's
+  // only meaningful paired with an actual staff role.
+  const canSeeApproverNav = isAdmin || (role != null && isTestCaseApprover);
+  const canSeeCrSizes = isAdmin || role === "PMO" || role === "BA" || role === "ITPM";
   const canSeeSecurityReport = isAdmin || role === "ITPM";
   // Admin can view Deployment Management (read-only — see deployment.functions.ts)
   // but not act on it, unlike CR Size Management where Admin has no access
   // at all — so Admin is included here for nav visibility.
   const canSeeDeployment = isAdmin || role === "PMO" || role === "ITPM" || role === "BA";
-  // CR Planner: ITPM only, deliberately excluding Admin — matches the
-  // spec's "Visible only for ITPM users" literally.
-  const canSeePlanner = role === "ITPM";
-  // Planner Calendar: ITPM + Admin (read-only), unlike CR Planner itself.
+  // CR Planner: ITPM can edit; Admin gets the read-only baseline too.
+  const canSeePlanner = isAdmin || role === "ITPM";
+  // Planner Calendar: same audience as CR Planner.
   const canSeePlannerCalendar = isAdmin || role === "ITPM";
+  // A no-role account (not Admin, no staff role assigned) has no
+  // legitimate use for any screen in this app — matches the server-side
+  // assertHasRoleOrAdmin() gate now applied to every previously-open read.
+  const noRoleBlocked = !isAdmin && role == null;
   // Persisted across navigations (AppShell remounts per route) and reloads
   // via localStorage — this is a pure UI preference, no reason to round-trip
   // it through the backend.
@@ -188,6 +202,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
           {nav.map((item) => {
+            // No role and not Admin = no legitimate use for any screen —
+            // this must win over every other check below.
+            if (noRoleBlocked) return null;
             if ("requiresAllocationAccess" in item && !canSeeAllocation) return null;
             if ("requiresTesterAccess" in item && !canSeeTesterNav) return null;
             if ("requiresApproverAccess" in item && !canSeeApproverNav) return null;
@@ -196,6 +213,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             if ("requiresDeploymentAccess" in item && !canSeeDeployment) return null;
             if ("requiresItpmOnlyAccess" in item && !canSeePlanner) return null;
             if ("requiresPlannerCalendarAccess" in item && !canSeePlannerCalendar) return null;
+            if ("requiresAdminOnlyAccess" in item && !isAdmin) return null;
             if ("hiddenForTester" in item && isTester) return null;
             const Icon = item.icon;
             const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);

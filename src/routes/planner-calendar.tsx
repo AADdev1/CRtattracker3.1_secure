@@ -171,6 +171,40 @@ function buildWeeks(monthCursor: Date): Date[][] {
   return weeks;
 }
 
+// Working days a bar occupies within [monthStart, monthEnd] only — a CR
+// spanning multiple months counts toward each month separately, matching
+// the calendar's own per-month view.
+function workingDaysInMonth(bar: Bar, monthStart: Date, monthEnd: Date): number {
+  const start = bar.start < monthStart ? monthStart : bar.start;
+  const end = bar.end > monthEnd ? monthEnd : bar.end;
+  if (start > end) return 0;
+  let count = 0;
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    if (isWorkingDay(cursor, HOLIDAY_SET)) count++;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return count;
+}
+
+interface LaneSummaryEntry {
+  crNumber: string;
+  title: string | null;
+  days: number;
+}
+
+function buildMonthSummary(bars: Bar[], monthCursor: Date): Record<Lane, LaneSummaryEntry[]> {
+  const monthStart = startOfMonth(monthCursor);
+  const monthEnd = endOfMonth(monthCursor);
+  const result: Record<Lane, LaneSummaryEntry[]> = { R1: [], R2: [], Tester: [] };
+  for (const bar of bars) {
+    const days = workingDaysInMonth(bar, monthStart, monthEnd);
+    if (days > 0) result[bar.lane].push({ crNumber: bar.crNumber, title: bar.title, days });
+  }
+  for (const lane of LANES) result[lane].sort((a, b) => b.days - a.days);
+  return result;
+}
+
 function PlannerCalendarPage() {
   const { role, isAdmin, isLoading } = useAppUser();
   const navigate = useNavigate();
@@ -195,6 +229,7 @@ function PlannerCalendarView() {
   const flags = useMemo(() => buildFlags(rows), [rows]);
   const { trackOf, maxTrack } = useMemo(() => assignTracks(bars), [bars]);
   const weeks = useMemo(() => buildWeeks(monthCursor), [monthCursor]);
+  const summary = useMemo(() => buildMonthSummary(bars, monthCursor), [bars, monthCursor]);
 
   return (
     <AppShell>
@@ -266,6 +301,41 @@ function PlannerCalendarView() {
                   flags={flags}
                 />
               ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-sm font-medium mb-3">
+              {format(monthCursor, "MMMM yyyy")} — Working Days by Resource
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {LANES.map((lane) => {
+                const entries = summary[lane];
+                const total = entries.reduce((sum, e) => sum + e.days, 0);
+                return (
+                  <div key={lane} className={cn("rounded-md p-3 text-sm", LANE_BG[lane])}>
+                    <div className="font-semibold mb-2">{lane}</div>
+                    {entries.length === 0 ? (
+                      <div className="text-xs text-muted-foreground">
+                        No working days this month.
+                      </div>
+                    ) : (
+                      <ul className="space-y-1">
+                        {entries.map((e) => (
+                          <li key={e.crNumber} title={e.title ?? undefined}>
+                            {e.days} day{e.days === 1 ? "" : "s"} on {e.crNumber}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="font-medium mt-2 pt-2 border-t border-border/40">
+                      Total: {total} day{total === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>

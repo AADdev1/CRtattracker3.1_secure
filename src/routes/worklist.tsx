@@ -9,7 +9,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { ChevronDown } from "lucide-react";
 import { KpiStatusBadge } from "@/components/kpi-status-badge";
@@ -40,12 +45,17 @@ interface Row {
   utilization_pct: number | null;
   status: KpiStatusValue;
   kpis: { id: string; name: string } | null;
-  crs: { application: string | null; cr_size: string | null; ba: string | null; itpm: string | null } | null;
+  crs: {
+    application: string | null;
+    cr_size: string | null;
+    ba: string | null;
+    itpm: string | null;
+  } | null;
 }
 
 function WorklistPage() {
   const search = Route.useSearch();
-  const { isAdmin } = useAppUser();
+  const { isAdmin, role, isLoading: userLoading } = useAppUser();
   const [kpi, setKpi] = useState<string[]>([]);
   const [app, setApp] = useState<string[]>([]);
   const [size, setSize] = useState<string[]>([]);
@@ -56,10 +66,14 @@ function WorklistPage() {
     if (s == null) return [];
     return Array.isArray(s) ? s : [s];
   });
+  // No role and not Admin = no legitimate use for this screen — matches
+  // the server-side assertHasRoleOrAdmin() gate on getScopedKpiResults.
+  const noRoleBlocked = !userLoading && !isAdmin && role == null;
 
   const q = useQuery({
     queryKey: ["worklist"],
     queryFn: async () => (await getScopedKpiResults()) as unknown as Row[],
+    enabled: !noRoleBlocked,
   });
 
   const rows = q.data ?? [];
@@ -82,6 +96,22 @@ function WorklistPage() {
     return true;
   });
 
+  if (userLoading) return null;
+  if (noRoleBlocked) {
+    return (
+      <AppShell>
+        <PageHeader title="KPI Worklist" />
+        <PageBody>
+          <Card>
+            <CardContent className="p-12 text-center text-muted-foreground">
+              Your account doesn't have a role assigned yet. Contact an administrator to get access.
+            </CardContent>
+          </Card>
+        </PageBody>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       <PageHeader
@@ -91,29 +121,60 @@ function WorklistPage() {
       <PageBody>
         <Card>
           <CardContent className="p-4 flex flex-wrap gap-3">
-            <MultiSelectFilter label="KPI" values={kpi} onChange={setKpi} options={kpiOpts} placeholder="All KPIs" />
+            <MultiSelectFilter
+              label="KPI"
+              values={kpi}
+              onChange={setKpi}
+              options={kpiOpts}
+              placeholder="All KPIs"
+            />
             <MultiSelectFilter
               label="Status"
               values={status}
               onChange={setStatus}
               options={[
-                { v: "green", l: "Green" }, { v: "amber", l: "Amber" }, { v: "red", l: "Red" },
-                { v: "pending", l: "Pending" }, { v: "not_started", l: "Not Started" },
+                { v: "green", l: "Green" },
+                { v: "amber", l: "Amber" },
+                { v: "red", l: "Red" },
+                { v: "pending", l: "Pending" },
+                { v: "not_started", l: "Not Started" },
               ]}
               placeholder="All statuses"
             />
-            <MultiSelectFilter label="Application" values={app} onChange={setApp} options={appOpts} placeholder="All apps" />
+            <MultiSelectFilter
+              label="Application"
+              values={app}
+              onChange={setApp}
+              options={appOpts}
+              placeholder="All apps"
+            />
             <MultiSelectFilter
               label="CR Size"
               values={size}
               onChange={setSize}
-              options={[{ v: "Small", l: "Small" }, { v: "Medium", l: "Medium" }, { v: "Large", l: "Large" }]}
+              options={[
+                { v: "Small", l: "Small" },
+                { v: "Medium", l: "Medium" },
+                { v: "Large", l: "Large" },
+              ]}
               placeholder="All sizes"
             />
             {isAdmin && (
               <>
-                <MultiSelectFilter label="BA" values={ba} onChange={setBa} options={baOpts} placeholder="All BAs" />
-                <MultiSelectFilter label="ITPM" values={itpm} onChange={setItpm} options={itpmOpts} placeholder="All ITPMs" />
+                <MultiSelectFilter
+                  label="BA"
+                  values={ba}
+                  onChange={setBa}
+                  options={baOpts}
+                  placeholder="All BAs"
+                />
+                <MultiSelectFilter
+                  label="ITPM"
+                  values={itpm}
+                  onChange={setItpm}
+                  options={itpmOpts}
+                  placeholder="All ITPMs"
+                />
               </>
             )}
           </CardContent>
@@ -154,19 +215,31 @@ function WorklistPage() {
                     <TableCell>{r.crs?.cr_size ?? "—"}</TableCell>
                     <TableCell className="text-xs">{fmt(r.start_date)}</TableCell>
                     <TableCell className="text-xs">{fmt(r.end_date)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{r.working_days ?? "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {r.working_days ?? "—"}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">{r.hold_days ?? "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{r.effective_days ?? "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {r.effective_days ?? "—"}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">{r.tat ?? "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{r.remaining_days ?? "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {r.remaining_days ?? "—"}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {r.utilization_pct != null ? `${r.utilization_pct.toFixed(0)}%` : "—"}
                     </TableCell>
-                    <TableCell><KpiStatusBadge status={r.status} /></TableCell>
+                    <TableCell>
+                      <KpiStatusBadge status={r.status} />
+                    </TableCell>
                   </TableRow>
                 ))}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={12} className="text-center py-12 text-muted-foreground">No KPI results match your filters.</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
+                      No KPI results match your filters.
+                    </TableCell>
+                  </TableRow>
                 )}
               </TableBody>
             </Table>
@@ -180,11 +253,17 @@ function WorklistPage() {
 function uniqueOptions(values: (string | null)[]): { v: string; l: string }[] {
   const s = new Set<string>();
   values.forEach((v) => v && s.add(v));
-  return Array.from(s).sort().map((v) => ({ v, l: v }));
+  return Array.from(s)
+    .sort()
+    .map((v) => ({ v, l: v }));
 }
 
 function MultiSelectFilter({
-  label, values, onChange, options, placeholder,
+  label,
+  values,
+  onChange,
+  options,
+  placeholder,
 }: {
   label: string;
   values: string[];
@@ -201,7 +280,9 @@ function MultiSelectFilter({
       <Popover>
         <PopoverTrigger asChild>
           <Button variant="outline" className="w-48 justify-between font-normal">
-            <span className="truncate">{values.length === 0 ? placeholder : `${values.length} selected`}</span>
+            <span className="truncate">
+              {values.length === 0 ? placeholder : `${values.length} selected`}
+            </span>
             <ChevronDown className="size-4 opacity-50 shrink-0" />
           </Button>
         </PopoverTrigger>

@@ -5,7 +5,7 @@
 // CR data). RLS is locked down, so these go through the service-role
 // client instead of the anon client.
 import { createServerFn } from "@tanstack/react-start";
-import { requireSessionUser } from "@/lib/gate.functions";
+import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
 
 // Deliberately does NOT include isAdmin — CR size/notes/workflow-status
 // edits are a PMO/BA/ITPM function-of-record, not an Admin one.
@@ -17,7 +17,7 @@ async function assertCrEditAccess() {
 }
 
 export const listAllCrsForSizeManagement = createServerFn({ method: "GET" }).handler(async () => {
-  await requireSessionUser();
+  assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("crs")
@@ -28,14 +28,19 @@ export const listAllCrsForSizeManagement = createServerFn({ method: "GET" }).han
 });
 
 export const updateCrSizeAndNotes = createServerFn({ method: "POST" })
-  .inputValidator((data: { crNumber: string; cr_size?: string | null; manual_notes?: string | null }) => data)
+  .inputValidator(
+    (data: { crNumber: string; cr_size?: string | null; manual_notes?: string | null }) => data,
+  )
   .handler(async ({ data }) => {
     await assertCrEditAccess();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const payload: Record<string, unknown> = {};
     if (data.cr_size !== undefined) payload.cr_size = data.cr_size;
     if (data.manual_notes !== undefined) payload.manual_notes = data.manual_notes;
-    const { error } = await supabaseAdmin.from("crs").update(payload as never).eq("cr_number", data.crNumber);
+    const { error } = await supabaseAdmin
+      .from("crs")
+      .update(payload as never)
+      .eq("cr_number", data.crNumber);
     if (error) throw new Error(error.message);
     return { ok: true as const };
   });
@@ -91,7 +96,10 @@ export const updateCrWorkflowStatus = createServerFn({ method: "POST" })
       date_modified: nowIso,
       [data.dbColumn]: nowIso,
     };
-    const { error } = await supabaseAdmin.from("crs").update(payload as never).eq("cr_number", data.crNumber);
+    const { error } = await supabaseAdmin
+      .from("crs")
+      .update(payload as never)
+      .eq("cr_number", data.crNumber);
     if (error) throw new Error(error.message);
     return { ok: true as const };
   });

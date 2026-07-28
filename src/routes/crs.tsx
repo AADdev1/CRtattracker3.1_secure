@@ -1,6 +1,6 @@
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -53,6 +53,18 @@ export const Route = createFileRoute("/crs")({
 
 function CrLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { role, isAdmin, isLoading } = useAppUser();
+  const navigate = useNavigate();
+  // No role and not Admin = no legitimate use for this screen (or the CR
+  // Detail page nested under it) — matches the server-side
+  // assertHasRoleOrAdmin() gate on getScopedCrs/getDeploymentInfoByCr/etc.
+  const blocked = !isLoading && !isAdmin && role == null;
+
+  useEffect(() => {
+    if (blocked) navigate({ to: "/" });
+  }, [blocked, navigate]);
+
+  if (isLoading || blocked) return null;
   // If a child route is matched, show only the child.
   if (pathname !== "/crs") return <Outlet />;
   return <CrRepository />;

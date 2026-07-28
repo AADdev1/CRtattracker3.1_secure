@@ -3,7 +3,7 @@
 // are Admin-only. RLS is locked down, so these go through the service-role
 // client instead of the anon client.
 import { createServerFn } from "@tanstack/react-start";
-import { requireSessionUser } from "@/lib/gate.functions";
+import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
 
 interface KpiFormInput {
   id?: string;
@@ -20,7 +20,7 @@ interface KpiFormInput {
 }
 
 export const listKpis = createServerFn({ method: "GET" }).handler(async () => {
-  await requireSessionUser();
+  assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin.from("kpis").select("*").order("name");
   if (error) throw new Error(error.message);
@@ -28,7 +28,7 @@ export const listKpis = createServerFn({ method: "GET" }).handler(async () => {
 });
 
 export const listKpiExcludedStatuses = createServerFn({ method: "GET" }).handler(async () => {
-  await requireSessionUser();
+  assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("kpi_excluded_statuses")
@@ -52,7 +52,11 @@ export const saveKpi = createServerFn({ method: "POST" })
       const { error } = await supabaseAdmin.from("kpis").update(payload).eq("id", kpiId);
       if (error) throw new Error(error.message);
     } else {
-      const { data: created, error } = await supabaseAdmin.from("kpis").insert(payload).select("id").single();
+      const { data: created, error } = await supabaseAdmin
+        .from("kpis")
+        .insert(payload)
+        .select("id")
+        .single();
       if (error) throw new Error(error.message);
       kpiId = created.id;
     }

@@ -15,7 +15,7 @@
 // csv-import.ts.
 import * as XLSX from "xlsx";
 import { createServerFn } from "@tanstack/react-start";
-import { requireSessionUser } from "@/lib/gate.functions";
+import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
 import { assertFileSizeOk, assertRowCountOk } from "@/lib/upload-limits";
 import type { Database } from "@/integrations/supabase/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -36,7 +36,7 @@ export interface TestCaseUploadRow {
 // manually-entered number. Unscoped like the rest of test case management:
 // a CR's completion isn't tied to who's viewing it.
 export const getTestCaseCompletionByCr = createServerFn({ method: "GET" }).handler(async () => {
-  await requireSessionUser();
+  assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: testCases, error } = await supabaseAdmin
     .from("test_cases")
@@ -259,8 +259,11 @@ export const updateExecutionStatus = createServerFn({ method: "POST" })
 // mechanism as scoped-data.functions.ts — plus spoc_applications, rather
 // than a new per-CR approver table.
 export const listSubmittedForApproval = createServerFn({ method: "GET" }).handler(async () => {
-  const { userName, isAdmin, isTestCaseApprover, spocApplications } = await requireSessionUser();
-  if (!isAdmin && !isTestCaseApprover) throw new Error("Forbidden");
+  const { userName, isAdmin, role, isTestCaseApprover, spocApplications } =
+    await requireSessionUser();
+  // A no-role account can't use the approver flag to get in — the flag is
+  // only meaningful paired with an actual staff role.
+  if (!isAdmin && !(role != null && isTestCaseApprover)) throw new Error("Forbidden");
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: testCases, error: tcErr } = await supabaseAdmin
@@ -311,8 +314,11 @@ export const listSubmittedForApproval = createServerFn({ method: "GET" }).handle
 export const updateApproverComment = createServerFn({ method: "POST" })
   .inputValidator((data: { testCaseId: string; comment: string | null }) => data)
   .handler(async ({ data }) => {
-    const { userName, isAdmin, isTestCaseApprover, spocApplications } = await requireSessionUser();
-    if (!isAdmin && !isTestCaseApprover) throw new Error("Forbidden");
+    const { userName, isAdmin, role, isTestCaseApprover, spocApplications } =
+      await requireSessionUser();
+    // A no-role account can't use the approver flag to get in — the flag
+    // is only meaningful paired with an actual staff role.
+    if (!isAdmin && !(role != null && isTestCaseApprover)) throw new Error("Forbidden");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: row, error: fetchErr } = await supabaseAdmin
@@ -364,8 +370,11 @@ async function assertApproverForCr(
 export const approveTestCases = createServerFn({ method: "POST" })
   .inputValidator((data: { crNumber: string }) => data)
   .handler(async ({ data }) => {
-    const { userName, isAdmin, isTestCaseApprover, spocApplications } = await requireSessionUser();
-    if (!isAdmin && !isTestCaseApprover) throw new Error("Forbidden");
+    const { userName, isAdmin, role, isTestCaseApprover, spocApplications } =
+      await requireSessionUser();
+    // A no-role account can't use the approver flag to get in — the flag
+    // is only meaningful paired with an actual staff role.
+    if (!isAdmin && !(role != null && isTestCaseApprover)) throw new Error("Forbidden");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await assertApproverForCr(supabaseAdmin, data.crNumber, userName, isAdmin, spocApplications);
 
@@ -391,8 +400,11 @@ export const approveTestCases = createServerFn({ method: "POST" })
 export const sendBackTestCases = createServerFn({ method: "POST" })
   .inputValidator((data: { crNumber: string; overallComment?: string | null }) => data)
   .handler(async ({ data }) => {
-    const { userName, isAdmin, isTestCaseApprover, spocApplications } = await requireSessionUser();
-    if (!isAdmin && !isTestCaseApprover) throw new Error("Forbidden");
+    const { userName, isAdmin, role, isTestCaseApprover, spocApplications } =
+      await requireSessionUser();
+    // A no-role account can't use the approver flag to get in — the flag
+    // is only meaningful paired with an actual staff role.
+    if (!isAdmin && !(role != null && isTestCaseApprover)) throw new Error("Forbidden");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await assertApproverForCr(supabaseAdmin, data.crNumber, userName, isAdmin, spocApplications);
 
@@ -432,7 +444,7 @@ export const sendBackTestCases = createServerFn({ method: "POST" })
 export const getCrTestingHeader = createServerFn({ method: "GET" })
   .inputValidator((data: { crNumber: string }) => data)
   .handler(async ({ data }) => {
-    await requireSessionUser();
+    assertHasRoleOrAdmin(await requireSessionUser());
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: cr, error } = await supabaseAdmin
       .from("crs")
@@ -450,7 +462,7 @@ export const getCrTestingHeader = createServerFn({ method: "GET" })
 export const getTestCases = createServerFn({ method: "GET" })
   .inputValidator((data: { crNumber: string }) => data)
   .handler(async ({ data }) => {
-    await requireSessionUser();
+    assertHasRoleOrAdmin(await requireSessionUser());
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows, error } = await supabaseAdmin
       .from("test_cases")

@@ -14,13 +14,24 @@ import type { Database } from "@/integrations/supabase/types";
 
 type PlannerRow = Database["public"]["Tables"]["cr_planner"]["Row"];
 
-// ITPM only — no Admin bypass. This is a deliberate deviation from this
-// app's usual "Admin sees everything read-only" convention, matching the
-// spec's "Visible only for ITPM users" literally.
+// ITPM only — no Admin bypass. Editing the planner stays a PMO/BA/ITPM-
+// style function-of-record, not an Admin one, matching the spec's
+// "Visible only for ITPM users" literally for the write path.
 async function assertPlannerActor() {
   const session = await requireSessionUser();
   if (session.role !== "ITPM") {
     throw new Error("Forbidden: CR Planner is available to ITPM only");
+  }
+  return session;
+}
+
+// ITPM or Admin — Admin gets the app-wide "read-only everywhere" baseline
+// on the planner grid and PROD Date list, without unlocking any of the
+// edit/add actions above (those still go through assertPlannerActor).
+async function assertPlannerViewer() {
+  const session = await requireSessionUser();
+  if (session.role !== "ITPM" && !session.isAdmin) {
+    throw new Error("Forbidden: CR Planner is available to ITPM and Admin only");
   }
   return session;
 }
@@ -77,7 +88,7 @@ export const listActiveCrsForPlanner = createServerFn({ method: "GET" }).handler
 // display fields from crs (no SQL join, same client-side-merge style
 // already used throughout this codebase, e.g. crs.tsx's defectStats map).
 export const listPlannerGrid = createServerFn({ method: "GET" }).handler(async () => {
-  await requireSessionUser();
+  await assertPlannerViewer();
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: planner, error: plannerErr } = await supabaseAdmin.from("cr_planner").select("*");
@@ -124,7 +135,7 @@ export const listPlannerGrid = createServerFn({ method: "GET" }).handler(async (
 // listPlannedSchedules runs, not an import of it, so this file still has
 // zero code-level dependency on deployment.functions.ts.
 export const listPlannedDeploymentDates = createServerFn({ method: "GET" }).handler(async () => {
-  await requireSessionUser();
+  await assertPlannerViewer();
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("deployment_schedule")

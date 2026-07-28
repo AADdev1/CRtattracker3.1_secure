@@ -25,7 +25,7 @@
 // (application, date) pair, so that match is never ambiguous.
 import { createServerFn } from "@tanstack/react-start";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { requireSessionUser } from "@/lib/gate.functions";
+import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
 import { recalculateForCr } from "@/lib/kpi-engine";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -159,7 +159,9 @@ async function loadAssignedCrStats(supabaseAdmin: SupabaseClient<Database>, user
 // ─────────────────────────── Reads ───────────────────────────
 
 export const listDeploymentSchedules = createServerFn({ method: "GET" }).handler(async () => {
-  const { isAdmin, userName, role } = await requireSessionUser();
+  const session = await requireSessionUser();
+  assertHasRoleOrAdmin(session);
+  const { isAdmin, userName, role } = session;
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: schedules, error } = await supabaseAdmin
@@ -186,7 +188,7 @@ export const listDeploymentSchedules = createServerFn({ method: "GET" }).handler
 });
 
 export const listPlannedSchedules = createServerFn({ method: "GET" }).handler(async () => {
-  await requireSessionUser();
+  assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("deployment_schedule")
@@ -202,7 +204,7 @@ export const listPlannedSchedules = createServerFn({ method: "GET" }).handler(as
 // crs.tsx uses for its application filter, just computed server-side
 // since this page doesn't otherwise load the full CR list.
 export const listCrApplications = createServerFn({ method: "GET" }).handler(async () => {
-  await requireSessionUser();
+  assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("crs")
@@ -223,7 +225,9 @@ export const listCrApplications = createServerFn({ method: "GET" }).handler(asyn
 // from crs alone. PMO/Admin see every eligible CR; ITPM/BA see only CRs
 // where they're the BA/ITPM.
 export const listEligibleCrsForPlanning = createServerFn({ method: "GET" }).handler(async () => {
-  const { isAdmin, userName, role } = await requireSessionUser();
+  const session = await requireSessionUser();
+  assertHasRoleOrAdmin(session);
+  const { isAdmin, userName, role } = session;
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   // is_dropped is nullable in the live table — matching the convention
@@ -248,7 +252,9 @@ export const listEligibleCrsForPlanning = createServerFn({ method: "GET" }).hand
 });
 
 export const getDeploymentDashboardSummary = createServerFn({ method: "GET" }).handler(async () => {
-  const { isAdmin, userName, role } = await requireSessionUser();
+  const session = await requireSessionUser();
+  assertHasRoleOrAdmin(session);
+  const { isAdmin, userName, role } = session;
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: schedules, error } = await supabaseAdmin
@@ -287,7 +293,7 @@ export const getDeploymentDashboardSummary = createServerFn({ method: "GET" }).h
 // keyed by cr_number, merged client-side into a Map, no SQL join needed
 // on the caller's side).
 export const getDeploymentInfoByCr = createServerFn({ method: "GET" }).handler(async () => {
-  await requireSessionUser();
+  assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: crs, error } = await supabaseAdmin
@@ -305,7 +311,7 @@ export const getDeploymentInfoByCr = createServerFn({ method: "GET" }).handler(a
 export const getDeploymentScheduleCrs = createServerFn({ method: "GET" })
   .inputValidator((data: { scheduleId: string }) => data)
   .handler(async ({ data }) => {
-    await requireSessionUser();
+    assertHasRoleOrAdmin(await requireSessionUser());
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: schedule, error: schedErr } = await supabaseAdmin

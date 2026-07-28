@@ -67,6 +67,18 @@ export const requireSessionUser = createServerOnlyFn(
   },
 );
 
+// A user with no role and no Admin flag has no legitimate use for any
+// screen in this app. Call this right after requireSessionUser() in any
+// handler that was previously "open to any authenticated account" (a bare
+// requireSessionUser() with no further check) so no-role accounts are
+// rejected consistently everywhere, instead of relying solely on the nav
+// link being hidden — a direct call would otherwise still go through.
+export function assertHasRoleOrAdmin(session: { isAdmin: boolean; role: StaffRole | null }): void {
+  if (!session.isAdmin && session.role == null) {
+    throw new Error("Forbidden: your account has no role assigned. Contact an administrator.");
+  }
+}
+
 // Non-throwing wrapper for UI display (useAppUser / app-shell) — same
 // shape the interim cookie-based version used, so callers need no changes.
 export const getAuthState = createServerFn({ method: "GET" }).handler(async () => {
