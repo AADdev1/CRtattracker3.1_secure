@@ -36,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, CalendarIcon, Plus, X } from "lucide-react";
+import { ArrowLeft, CalendarIcon, Plus } from "lucide-react";
 import { DeploymentStageBadge } from "@/components/deployment-stage-badge";
 import { useAppUser } from "@/lib/app-user";
 import {
@@ -590,7 +590,7 @@ function DeploymentPlanningView({ canManage }: { canManage: boolean }) {
                                   }
                                 }}
                               >
-                                <X className="size-3.5 mr-1" /> Cancel
+                                Remove
                               </Button>
                             )}
                           </TableCell>
