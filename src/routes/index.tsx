@@ -50,7 +50,16 @@ interface CrListRow {
   cr_size: string | null;
   ba: string | null;
   itpm: string | null;
+  workflow_status: string | null;
 }
+
+// workflow_status is inconsistently formatted in live data (CSV import
+// sometimes writes the raw CMS code with underscores, sometimes the
+// space-separated label) — same both-format defensive matching already
+// used in deployment.functions.ts's DEPLOYMENT_TERMINAL_WORKFLOW_STATUSES,
+// duplicated here rather than imported since this is Dashboard-local
+// display logic, not a deployment-planning concern.
+const LIVE_AND_CLOSED_STATUSES = new Set(["29_Live and Closed", "29 Live and Closed"]);
 
 function Dashboard() {
   const { isAdmin, role, isLoading: userLoading } = useAppUser();
@@ -149,6 +158,12 @@ function Dashboard() {
       .sort((a, b) => (b.utilization_pct ?? 0) - (a.utilization_pct ?? 0))
       .slice(0, 10);
     const pendingSize = crList.filter((c) => !c.cr_size).length;
+    // "Active CRs" excludes CRs that are Live and Closed — those are done,
+    // not active work — without narrowing crList itself (Pending Sizing,
+    // KPI counts, and defect stats below are intentionally unaffected).
+    const activeCrs = crList.filter(
+      (c) => !c.workflow_status || !LIVE_AND_CLOSED_STATUSES.has(c.workflow_status),
+    ).length;
     let openDefects = 0;
     let maxAging = 0;
     for (const v of defectStats.values()) {
@@ -156,7 +171,7 @@ function Dashboard() {
       if (v.maxAgingDays != null && v.maxAgingDays > maxAging) maxAging = v.maxAgingDays;
     }
     return {
-      activeCrs: crList.length,
+      activeCrs,
       pendingSize,
       counts,
       nearBreach,
