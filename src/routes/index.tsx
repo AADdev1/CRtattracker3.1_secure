@@ -223,7 +223,7 @@ function Dashboard() {
             to="/crs"
           />
           <StatCard
-            label="Pending CR Size"
+            label="CRs Pending Sizing"
             value={s?.pendingSize ?? 0}
             icon={<Ruler className="size-4" />}
             tone={s?.pendingSize ? "amber" : "muted"}
