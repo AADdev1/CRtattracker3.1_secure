@@ -36,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, CalendarIcon, Plus } from "lucide-react";
+import { ArrowLeft, CalendarIcon, Plus, X } from "lucide-react";
 import { DeploymentStageBadge } from "@/components/deployment-stage-badge";
 import { useAppUser } from "@/lib/app-user";
 import {
@@ -50,6 +50,7 @@ import {
   listPlannedSchedules,
   markDeploymentScheduleCompleted,
   MANUAL_DEPLOYMENT_STAGES,
+  removeCrFromDeployment,
   updateDeploymentSchedule,
   updateDeploymentStage,
   type DeploymentStage,
@@ -95,6 +96,7 @@ function DeploymentPlanningView({ canManage }: { canManage: boolean }) {
   const updateStageFn = useServerFn(updateDeploymentStage);
   const updateScheduleFn = useServerFn(updateDeploymentSchedule);
   const markCompletedFn = useServerFn(markDeploymentScheduleCompleted);
+  const removeCrFn = useServerFn(removeCrFromDeployment);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [application, setApplication] = useState("");
@@ -238,6 +240,18 @@ function DeploymentPlanningView({ canManage }: { canManage: boolean }) {
       qc.invalidateQueries({ queryKey: ["deployment-schedules"] });
       qc.invalidateQueries({ queryKey: ["deployment-dashboard-summary"] });
       qc.invalidateQueries({ queryKey: ["deployment-schedule-crs", selectedScheduleId] });
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : String(e)),
+  });
+
+  const removeCr = useMutation({
+    mutationFn: (crNumber: string) => removeCrFn({ data: { crNumber } }),
+    onSuccess: () => {
+      toast.success("Removed from deployment — eligible for planning again.");
+      qc.invalidateQueries({ queryKey: ["deployment-schedule-crs", selectedScheduleId] });
+      qc.invalidateQueries({ queryKey: ["deployment-eligible-crs"] });
+      qc.invalidateQueries({ queryKey: ["deployment-schedules"] });
+      qc.invalidateQueries({ queryKey: ["deployment-dashboard-summary"] });
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : String(e)),
   });
@@ -513,6 +527,7 @@ function DeploymentPlanningView({ canManage }: { canManage: boolean }) {
                     <TableHead>Workflow Status</TableHead>
                     <TableHead>Deployment Stage</TableHead>
                     <TableHead>Allocation Remarks</TableHead>
+                    {canManage && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -558,12 +573,37 @@ function DeploymentPlanningView({ canManage }: { canManage: boolean }) {
                         <TableCell className="max-w-xs truncate text-muted-foreground">
                           {c.allocation_remarks || "—"}
                         </TableCell>
+                        {canManage && (
+                          <TableCell className="text-right">
+                            {selectedSchedule?.status === "Planned" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={removeCr.isPending}
+                                onClick={() => {
+                                  if (
+                                    confirm(
+                                      `Remove ${c.cr_number} from this deployment? It will become eligible for deployment planning again.`,
+                                    )
+                                  ) {
+                                    removeCr.mutate(c.cr_number);
+                                  }
+                                }}
+                              >
+                                <X className="size-3.5 mr-1" /> Cancel
+                              </Button>
+                            )}
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })}
                   {(scheduleCrs.data ?? []).length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                      <TableCell
+                        colSpan={canManage ? 9 : 8}
+                        className="text-center py-12 text-muted-foreground"
+                      >
                         No CRs assigned to this deployment yet.
                       </TableCell>
                     </TableRow>
