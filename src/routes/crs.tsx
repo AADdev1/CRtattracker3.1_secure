@@ -44,6 +44,7 @@ import {
   type DeploymentStage,
 } from "@/lib/deployment.functions";
 import { DeploymentStageBadge } from "@/components/deployment-stage-badge";
+import { MultiSelectFilter } from "@/components/multi-select-filter";
 import { useAppUser } from "@/lib/app-user";
 
 export const Route = createFileRoute("/crs")({
@@ -74,9 +75,9 @@ function CrRepository() {
   const { role } = useAppUser();
   const canEditStatus = role === "PMO" || role === "BA" || role === "ITPM";
   const [q, setQ] = useState("");
-  const [app, setApp] = useState<string>("__all__");
-  const [size, setSize] = useState<string>("__all__");
-  const [status, setStatus] = useState<string>("__all__");
+  const [app, setApp] = useState<string[]>([]);
+  const [size, setSize] = useState<string[]>([]);
+  const [status, setStatus] = useState<string[]>([]);
   type SortKey =
     | "cr_number"
     | "title"
@@ -191,9 +192,10 @@ function CrRepository() {
     d ? Math.floor((now - new Date(d).getTime()) / 86400000) : null;
 
   const filtered = (crs.data ?? []).filter((c) => {
-    if (app !== "__all__" && c.application !== app) return false;
-    if (size !== "__all__" && c.cr_size !== size) return false;
-    if (status !== "__all__" && c.workflow_status !== status) return false;
+    if (app.length > 0 && (!c.application || !app.includes(c.application))) return false;
+    if (size.length > 0 && (!c.cr_size || !size.includes(c.cr_size))) return false;
+    if (status.length > 0 && (!c.workflow_status || !status.includes(c.workflow_status)))
+      return false;
     if (q) {
       const t = q.toLowerCase();
       if (!c.cr_number.toLowerCase().includes(t) && !(c.title ?? "").toLowerCase().includes(t))
@@ -294,43 +296,34 @@ function CrRepository() {
                 className="pl-9"
               />
             </div>
-            <Select value={app} onValueChange={setApp}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Application" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All applications</SelectItem>
-                {apps.map((a) => (
-                  <SelectItem key={a} value={a}>
-                    {a}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={size} onValueChange={setSize}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Size" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All sizes</SelectItem>
-                <SelectItem value="Small">Small</SelectItem>
-                <SelectItem value="Medium">Medium</SelectItem>
-                <SelectItem value="Large">Large</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger className="w-64">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All statuses</SelectItem>
-                {statuses.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <MultiSelectFilter
+              label="Application"
+              values={app}
+              onChange={setApp}
+              options={apps.map((a) => ({ v: a, l: a }))}
+              placeholder="All applications"
+              triggerClassName="w-48"
+            />
+            <MultiSelectFilter
+              label="Size"
+              values={size}
+              onChange={setSize}
+              options={[
+                { v: "Small", l: "Small" },
+                { v: "Medium", l: "Medium" },
+                { v: "Large", l: "Large" },
+              ]}
+              placeholder="All sizes"
+              triggerClassName="w-40"
+            />
+            <MultiSelectFilter
+              label="Status"
+              values={status}
+              onChange={setStatus}
+              options={statuses.map((s) => ({ v: s, l: s }))}
+              placeholder="All statuses"
+              triggerClassName="w-64"
+            />
           </CardContent>
         </Card>
 

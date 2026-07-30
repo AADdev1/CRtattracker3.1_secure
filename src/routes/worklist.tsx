@@ -4,10 +4,6 @@ import { useMemo, useState } from "react";
 import { z } from "zod";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Table,
   TableBody,
@@ -16,8 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ChevronDown } from "lucide-react";
 import { KpiStatusBadge } from "@/components/kpi-status-badge";
+import { MultiSelectFilter } from "@/components/multi-select-filter";
 import type { KpiStatusValue } from "@/lib/kpi-engine";
 import { getScopedKpiResults } from "@/lib/scoped-data.functions";
 import { useAppUser } from "@/lib/app-user";
@@ -256,64 +252,6 @@ function uniqueOptions(values: (string | null)[]): { v: string; l: string }[] {
   return Array.from(s)
     .sort()
     .map((v) => ({ v, l: v }));
-}
-
-function MultiSelectFilter({
-  label,
-  values,
-  onChange,
-  options,
-  placeholder,
-}: {
-  label: string;
-  values: string[];
-  onChange: (values: string[]) => void;
-  options: { v: string; l: string }[];
-  placeholder: string;
-}) {
-  const toggle = (v: string) => {
-    onChange(values.includes(v) ? values.filter((x) => x !== v) : [...values, v]);
-  };
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="outline" className="w-48 justify-between font-normal">
-            <span className="truncate">
-              {values.length === 0 ? placeholder : `${values.length} selected`}
-            </span>
-            <ChevronDown className="size-4 opacity-50 shrink-0" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-56 p-0" align="start">
-          <ScrollArea className="h-56">
-            <div className="p-2 space-y-1">
-              {options.map((o) => (
-                <label
-                  key={o.v}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm"
-                >
-                  <Checkbox checked={values.includes(o.v)} onCheckedChange={() => toggle(o.v)} />
-                  <span className="truncate">{o.l}</span>
-                </label>
-              ))}
-              {options.length === 0 && (
-                <div className="text-xs text-muted-foreground p-2">No options.</div>
-              )}
-            </div>
-          </ScrollArea>
-          {values.length > 0 && (
-            <div className="border-t p-2">
-              <Button variant="ghost" size="sm" className="w-full" onClick={() => onChange([])}>
-                Clear
-              </Button>
-            </div>
-          )}
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
 }
 
 function fmt(v: string | null): string {

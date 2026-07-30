@@ -71,12 +71,18 @@ export const getScopedCrs = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const session = await requireSessionUser();
     assertHasRoleOrAdmin(session);
-    const { userName, isAdmin, spocApplications } = session;
+    const { userName, isAdmin, role, spocApplications } = session;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // PMO gets the same unrestricted CR visibility as Admin — an explicit
+    // rule, not left to coincidentally-broad spoc_applications coverage.
+    // Deliberately NOT extended to getScopedKpiResults/getScopedDefects
+    // below — PMO's KPI Worklist and defect visibility stay scoped by
+    // relation, same as ITPM/BA, only Admin sees everything there.
+    const seesAllCrs = isAdmin || role === "PMO";
     const scoped = await loadScopedCrs(
       supabaseAdmin,
       userName,
-      isAdmin,
+      seesAllCrs,
       spocApplications,
       data.crNumber,
     );
