@@ -6,11 +6,22 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { KpiStatusBadge } from "@/components/kpi-status-badge";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { buildTimeline, type CrRow, type WorkflowStatusRow } from "@/lib/kpi-engine";
-import { getScopedCrs, getScopedKpiResults, getScopedDefects, type CrRelation } from "@/lib/scoped-data.functions";
+import {
+  getScopedCrs,
+  getScopedKpiResults,
+  getScopedDefects,
+  type CrRelation,
+} from "@/lib/scoped-data.functions";
 import { getWorkflowStatuses } from "@/lib/workflow-statuses.functions";
+import { listUpdatesByCr } from "@/lib/cr-updates.functions";
 import type { Database } from "@/integrations/supabase/types";
 
 type CrDetailRow = Database["public"]["Tables"]["crs"]["Row"] & { relation: CrRelation };
@@ -41,6 +52,11 @@ function CrDetails() {
     },
   });
 
+  const updates = useQuery({
+    queryKey: ["cr-updates", crNumber],
+    queryFn: () => listUpdatesByCr({ data: { crNumber } }),
+  });
+
   const cr = data.data?.cr;
   const statuses = (data.data?.statuses ?? []) as WorkflowStatusRow[];
   const results = data.data?.results ?? [];
@@ -60,7 +76,9 @@ function CrDetails() {
         <PageHeader title="CR not found" />
         <PageBody>
           <Button asChild variant="outline">
-            <Link to="/crs"><ArrowLeft /> Back to Repository</Link>
+            <Link to="/crs">
+              <ArrowLeft /> Back to Repository
+            </Link>
           </Button>
         </PageBody>
       </AppShell>
@@ -76,13 +94,17 @@ function CrDetails() {
         description={cr.title ?? undefined}
         actions={
           <Button asChild variant="outline">
-            <Link to="/crs"><ArrowLeft /> Back</Link>
+            <Link to="/crs">
+              <ArrowLeft /> Back
+            </Link>
           </Button>
         }
       />
       <PageBody>
         <Card>
-          <CardHeader><CardTitle className="text-base">Basic Information</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">Basic Information</CardTitle>
+          </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-sm">
               <Field label="Application" value={cr.application} />
@@ -108,7 +130,9 @@ function CrDetails() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">KPI Timeline & Calculation Summary</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">KPI Timeline & Calculation Summary</CardTitle>
+          </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
@@ -127,20 +151,36 @@ function CrDetails() {
               </TableHeader>
               <TableBody>
                 {results.length === 0 ? (
-                  <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">No KPI results. Run the engine.</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                      No KPI results. Run the engine.
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   results.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">{r.kpis?.name}</TableCell>
                       <TableCell className="text-xs">{fmt(r.start_date)}</TableCell>
                       <TableCell className="text-xs">{fmt(r.end_date)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.working_days ?? "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.hold_days ?? "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.effective_days ?? "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {r.working_days ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {r.hold_days ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {r.effective_days ?? "—"}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">{r.tat ?? "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.remaining_days ?? "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.utilization_pct != null ? `${r.utilization_pct.toFixed(0)}%` : "—"}</TableCell>
-                      <TableCell><KpiStatusBadge status={r.status} /></TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {r.remaining_days ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {r.utilization_pct != null ? `${r.utilization_pct.toFixed(0)}%` : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <KpiStatusBadge status={r.status} />
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -150,7 +190,9 @@ function CrDetails() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">Workflow Timeline</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">Workflow Timeline</CardTitle>
+          </CardHeader>
           <CardContent>
             {timeline.length === 0 ? (
               <div className="text-sm text-muted-foreground">No workflow events recorded.</div>
@@ -160,9 +202,46 @@ function CrDetails() {
                   <li key={i} className="ml-5">
                     <span className="absolute -left-1.5 size-3 rounded-full ring-2 ring-background bg-primary" />
                     <div className="flex items-baseline gap-3">
-                      <span className="text-xs text-muted-foreground tabular-nums w-36 shrink-0">{fmt(t.ts.toISOString())}</span>
+                      <span className="text-xs text-muted-foreground tabular-nums w-36 shrink-0">
+                        {fmt(t.ts.toISOString())}
+                      </span>
                       <span className="text-sm font-medium">{t.label}</span>
                     </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Updates{" "}
+              <span className="text-muted-foreground font-normal">
+                ({(updates.data ?? []).length})
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(updates.data ?? []).length === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                No updates posted yet — add one from the CR Repository grid.
+              </div>
+            ) : (
+              <ol className="relative border-l border-border ml-2 space-y-4">
+                {(updates.data ?? []).map((u) => (
+                  <li key={u.id} className="ml-5">
+                    <span className="absolute -left-1.5 size-3 rounded-full ring-2 ring-background bg-primary" />
+                    <div className="flex items-baseline gap-3">
+                      <span className="text-xs text-muted-foreground tabular-nums w-36 shrink-0">
+                        {fmt(u.created_at)}
+                      </span>
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {u.created_by}
+                      </span>
+                    </div>
+                    <div className="text-sm mt-0.5">{u.update_text}</div>
                   </li>
                 ))}
               </ol>
@@ -174,12 +253,15 @@ function CrDetails() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">
-                Open Defects <span className="text-muted-foreground font-normal">({defects.length})</span>
+                Open Defects{" "}
+                <span className="text-muted-foreground font-normal">({defects.length})</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {defects.length === 0 ? (
-                <div className="text-sm text-muted-foreground py-8 text-center">No open defects linked to this CR.</div>
+                <div className="text-sm text-muted-foreground py-8 text-center">
+                  No open defects linked to this CR.
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -204,7 +286,9 @@ function CrDetails() {
                               {d.new_status ?? "—"}
                             </span>
                           </TableCell>
-                          <TableCell className="text-right tabular-nums">{aging != null ? `${aging}d` : "—"}</TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {aging != null ? `${aging}d` : "—"}
+                          </TableCell>
                         </TableRow>
                       );
                     })}

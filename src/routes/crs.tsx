@@ -19,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, Pencil } from "lucide-react";
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Pencil, MessageSquarePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,6 +28,7 @@ import {
   DialogTitle,
   DialogFooter,
   DialogDescription,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { recalculateForCr } from "@/lib/kpi-engine";
@@ -35,6 +36,7 @@ import { aggregateDefectStats } from "@/lib/defect-import";
 import { getScopedCrs, getScopedDefects } from "@/lib/scoped-data.functions";
 import { getWorkflowStatuses } from "@/lib/workflow-statuses.functions";
 import { updateCrWorkflowStatus } from "@/lib/crs-admin.functions";
+import { addCrUpdate, listUpdatesByCr } from "@/lib/cr-updates.functions";
 import { getTestCaseCompletionByCr } from "@/lib/test-cases.functions";
 import {
   DEPLOYMENT_TERMINAL_WORKFLOW_STATUSES,
@@ -46,6 +48,7 @@ import {
 import { DeploymentStageBadge } from "@/components/deployment-stage-badge";
 import { MultiSelectFilter } from "@/components/multi-select-filter";
 import { useAppUser } from "@/lib/app-user";
+import { FEATURES } from "@/lib/release-config";
 
 export const Route = createFileRoute("/crs")({
   head: () => ({ meta: [{ title: "CR Repository · Kpisavvy" }] }),
@@ -159,20 +162,27 @@ function CrRepository() {
     },
   });
 
+  // CR Testing Progress is Release 2 (Testing Governance) scope — don't
+  // even fire the request when that release isn't enabled, matching the
+  // server-side assertFeatureEnabled("testing") gate on this function.
   const testCaseCompletion = useQuery({
     queryKey: ["test-case-completion-by-cr"],
     queryFn: async () => {
       const rows = await getTestCaseCompletionByCr();
       return new Map(rows.map((r) => [r.cr_number, r]));
     },
+    enabled: FEATURES.testing,
   });
 
+  // Deployment Status Tracking is Release 3 scope — same reasoning, matches
+  // assertFeatureEnabled("deployment") on getDeploymentInfoByCr.
   const deploymentInfo = useQuery({
     queryKey: ["deployment-info-by-cr"],
     queryFn: async () => {
       const rows = await getDeploymentInfoByCr();
       return new Map(rows.map((r) => [r.cr_number, r]));
     },
+    enabled: FEATURES.deployment,
   });
 
   const apps = useMemo(() => {
@@ -416,27 +426,34 @@ function CrRepository() {
                     Max Defect Aging
                     <SortIcon k="max_defect_aging" />
                   </TableHead>
-                  <TableHead
-                    className="w-32 cursor-pointer select-none text-right"
-                    onClick={() => toggleSort("tested_pct")}
-                  >
-                    Tested
-                    <SortIcon k="tested_pct" />
-                  </TableHead>
-                  <TableHead
-                    className="cursor-pointer select-none"
-                    onClick={() => toggleSort("planned_deployment_date")}
-                  >
-                    Planned Deployment Date
-                    <SortIcon k="planned_deployment_date" />
-                  </TableHead>
-                  <TableHead
-                    className="cursor-pointer select-none"
-                    onClick={() => toggleSort("deployment_stage")}
-                  >
-                    Deployment Stage
-                    <SortIcon k="deployment_stage" />
-                  </TableHead>
+                  {FEATURES.testing && (
+                    <TableHead
+                      className="w-32 cursor-pointer select-none text-right"
+                      onClick={() => toggleSort("tested_pct")}
+                    >
+                      Tested
+                      <SortIcon k="tested_pct" />
+                    </TableHead>
+                  )}
+                  {FEATURES.deployment && (
+                    <>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => toggleSort("planned_deployment_date")}
+                      >
+                        Planned Deployment Date
+                        <SortIcon k="planned_deployment_date" />
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => toggleSort("deployment_stage")}
+                      >
+                        Deployment Stage
+                        <SortIcon k="deployment_stage" />
+                      </TableHead>
+                    </>
+                  )}
+                  <TableHead className="w-56">Updates</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -489,44 +506,53 @@ function CrRepository() {
                       <TableCell className="text-right tabular-nums">
                         {ds?.maxAgingDays != null ? `${ds.maxAgingDays}d` : "—"}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {testingPct(c.cr_number)}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {dep?.planned_deployment_date ? fmt(dep.planned_deployment_date) : "—"}
-                      </TableCell>
+                      {FEATURES.testing && (
+                        <TableCell className="text-right tabular-nums">
+                          {testingPct(c.cr_number)}
+                        </TableCell>
+                      )}
+                      {FEATURES.deployment && (
+                        <>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {dep?.planned_deployment_date ? fmt(dep.planned_deployment_date) : "—"}
+                          </TableCell>
+                          <TableCell>
+                            {isDeployedToProduction ? (
+                              <DeploymentStageBadge stage="Deployed to Production" />
+                            ) : canEditStatus &&
+                              dep?.planned_deployment_date &&
+                              dep?.deployment_stage ? (
+                              <Select
+                                value={dep.deployment_stage}
+                                onValueChange={(v) =>
+                                  updateStage.mutate({
+                                    crNumber: c.cr_number,
+                                    stage: v as DeploymentStage,
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="w-44 h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="UAT Signed Off" disabled>
+                                    UAT Signed Off
+                                  </SelectItem>
+                                  {MANUAL_DEPLOYMENT_STAGES.map((stage) => (
+                                    <SelectItem key={stage} value={stage}>
+                                      {stage}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <DeploymentStageBadge stage={dep?.deployment_stage ?? null} />
+                            )}
+                          </TableCell>
+                        </>
+                      )}
                       <TableCell>
-                        {isDeployedToProduction ? (
-                          <DeploymentStageBadge stage="Deployed to Production" />
-                        ) : canEditStatus &&
-                          dep?.planned_deployment_date &&
-                          dep?.deployment_stage ? (
-                          <Select
-                            value={dep.deployment_stage}
-                            onValueChange={(v) =>
-                              updateStage.mutate({
-                                crNumber: c.cr_number,
-                                stage: v as DeploymentStage,
-                              })
-                            }
-                          >
-                            <SelectTrigger className="w-44 h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="UAT Signed Off" disabled>
-                                UAT Signed Off
-                              </SelectItem>
-                              {MANUAL_DEPLOYMENT_STAGES.map((stage) => (
-                                <SelectItem key={stage} value={stage}>
-                                  {stage}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <DeploymentStageBadge stage={dep?.deployment_stage ?? null} />
-                        )}
+                        <CrUpdateCell crNumber={c.cr_number} canEdit={canEditStatus} />
                       </TableCell>
                       <TableCell className="text-right">
                         {canEditStatus && (
@@ -550,7 +576,10 @@ function CrRepository() {
                 })}
                 {sorted.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={16} className="text-center py-12 text-muted-foreground">
+                    <TableCell
+                      colSpan={14 + (FEATURES.testing ? 1 : 0) + (FEATURES.deployment ? 2 : 0)}
+                      className="text-center py-12 text-muted-foreground"
+                    >
                       No CRs match your filters.
                     </TableCell>
                   </TableRow>
@@ -615,5 +644,101 @@ function CrRepository() {
         </DialogContent>
       </Dialog>
     </AppShell>
+  );
+}
+
+function fmtDateTime(d: string | null): string {
+  if (!d) return "—";
+  const dt = new Date(d);
+  return Number.isNaN(dt.getTime()) ? "—" : dt.toLocaleString();
+}
+
+// CR Repository's Updates column — a button that opens a popup with an
+// add-update box and the CR's full update history below it. History is
+// only fetched once the dialog is actually opened, not for every row on
+// page load.
+function CrUpdateCell({ crNumber, canEdit }: { crNumber: string; canEdit: boolean }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+
+  const updates = useQuery({
+    queryKey: ["cr-updates", crNumber],
+    queryFn: () => listUpdatesByCr({ data: { crNumber } }),
+    enabled: open,
+  });
+
+  const submit = useMutation({
+    mutationFn: () => addCrUpdate({ data: { crNumber, updateText: text } }),
+    onSuccess: () => {
+      toast.success("Update added");
+      setText("");
+      qc.invalidateQueries({ queryKey: ["cr-updates", crNumber] });
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : String(e)),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <MessageSquarePlus className="size-3.5 mr-1" /> Add Update
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Updates — {crNumber}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {canEdit && (
+            <div className="flex items-center gap-2">
+              <Input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="Add a comment…"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && text.trim() && !submit.isPending) submit.mutate();
+                }}
+              />
+              <Button
+                size="sm"
+                className="shrink-0"
+                disabled={!text.trim() || submit.isPending}
+                onClick={() => submit.mutate()}
+              >
+                {submit.isPending ? "Saving…" : "Submit"}
+              </Button>
+            </div>
+          )}
+
+          <div className="max-h-80 overflow-y-auto">
+            {updates.isLoading ? (
+              <div className="text-sm text-muted-foreground text-center py-6">Loading…</div>
+            ) : (updates.data ?? []).length === 0 ? (
+              <div className="text-sm text-muted-foreground text-center py-6">
+                No updates posted yet.
+              </div>
+            ) : (
+              <ol className="relative border-l border-border ml-2 space-y-4">
+                {(updates.data ?? []).map((u) => (
+                  <li key={u.id} className="ml-5">
+                    <span className="absolute -left-1.5 size-3 rounded-full ring-2 ring-background bg-primary" />
+                    <div className="flex items-baseline gap-3">
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {fmtDateTime(u.created_at)}
+                      </span>
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {u.created_by}
+                      </span>
+                    </div>
+                    <div className="text-sm mt-0.5">{u.update_text}</div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -76,6 +76,38 @@ export type Database = {
           },
         ]
       }
+      cr_updates: {
+        Row: {
+          cr_number: string
+          created_at: string
+          created_by: string
+          id: string
+          update_text: string
+        }
+        Insert: {
+          cr_number: string
+          created_at?: string
+          created_by: string
+          id?: string
+          update_text: string
+        }
+        Update: {
+          cr_number?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          update_text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cr_updates_cr_number_fkey"
+            columns: ["cr_number"]
+            isOneToOne: false
+            referencedRelation: "crs"
+            referencedColumns: ["cr_number"]
+          },
+        ]
+      }
       crs: {
         Row: {
           application: string | null
