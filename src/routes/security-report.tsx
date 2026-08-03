@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useAppUser } from "@/lib/app-user";
+import { FEATURES } from "@/lib/release-config";
 import { getSecurityReport } from "@/lib/security-report.functions";
 
 export const Route = createFileRoute("/security-report")({
@@ -13,7 +14,7 @@ export const Route = createFileRoute("/security-report")({
 function SecurityReportPage() {
   const { isAdmin, role, isLoading } = useAppUser();
   const navigate = useNavigate();
-  const canAccess = isAdmin || role === "ITPM";
+  const canAccess = FEATURES.administration && (isAdmin || role === "ITPM");
 
   useEffect(() => {
     if (!isLoading && !canAccess) navigate({ to: "/" });

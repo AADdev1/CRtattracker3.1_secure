@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { Search } from "lucide-react";
 import { useAppUser } from "@/lib/app-user";
+import { FEATURES } from "@/lib/release-config";
 import { listSubmittedForApproval } from "@/lib/test-cases.functions";
 
 export const Route = createFileRoute("/test-case-approval")({
@@ -29,7 +30,7 @@ function TestCaseApprovalPage() {
   const { isAdmin, role, isTestCaseApprover, isLoading: userLoading } = useAppUser();
   // A no-role account can't use the approver flag alone to get in — it's
   // only meaningful paired with an actual staff role.
-  const canAccess = isAdmin || (role != null && isTestCaseApprover);
+  const canAccess = FEATURES.testing && (isAdmin || (role != null && isTestCaseApprover));
 
   useEffect(() => {
     if (!userLoading && !canAccess) navigate({ to: "/" });

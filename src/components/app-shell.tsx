@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useAppUser } from "@/lib/app-user";
+import { FEATURES } from "@/lib/release-config";
 
 // Testers only ever see Dashboard + Test Case Upload — the rest of these
 // (CR-management screens) aren't relevant to a shared test-case pool.
@@ -49,12 +50,19 @@ const nav = [
     label: "Deployment Planning",
     icon: ClipboardList,
     requiresDeploymentAccess: true,
+    feature: "deployment",
   },
   // CR Planner is a standalone module (see cr-planner.functions.ts). ITPM
   // can edit; Admin gets the app-wide read-only baseline (view the grid,
   // no Add/edit controls — see cr-planner.tsx). Editing itself stays
   // ITPM-only, enforced server-side in assertPlannerActor.
-  { to: "/cr-planner", label: "CR Planner", icon: CalendarRange, requiresItpmOnlyAccess: true },
+  {
+    to: "/cr-planner",
+    label: "CR Planner",
+    icon: CalendarRange,
+    requiresItpmOnlyAccess: true,
+    feature: "planner",
+  },
   // Same audience as CR Planner — a calendar view derived entirely from
   // cr_planner data.
   {
@@ -62,20 +70,29 @@ const nav = [
     label: "Planner Calendar",
     icon: CalendarDays,
     requiresPlannerCalendarAccess: true,
+    feature: "planner",
   },
   {
     to: "/test-case-upload",
     label: "Test Case Upload",
     icon: FileSpreadsheet,
     requiresTesterAccess: true,
+    feature: "testing",
   },
   {
     to: "/test-case-approval",
     label: "Test Case Approval",
     icon: ClipboardCheck,
     requiresApproverAccess: true,
+    feature: "testing",
   },
-  { to: "/kpis", label: "KPI Configuration", icon: Settings2, hiddenForTester: true },
+  {
+    to: "/kpis",
+    label: "KPI Configuration",
+    icon: Settings2,
+    hiddenForTester: true,
+    feature: "administration",
+  },
   // Admin-only in practice (defect-statuses.tsx's page guard is
   // `!isAdmin` → redirect) — a dedicated flag instead of `hiddenForTester`
   // so PMO/BA/ITPM don't see a nav link that immediately bounces them.
@@ -84,6 +101,7 @@ const nav = [
     label: "Defect Status Mapping",
     icon: Bug,
     requiresAdminOnlyAccess: true,
+    feature: "administration",
   },
   { to: "/worklist", label: "KPI Worklist", icon: ListChecks, hiddenForTester: true },
   { to: "/tat-logic", label: "TAT Calculator Logic", icon: Calculator, hiddenForTester: true },
@@ -96,6 +114,7 @@ const nav = [
     icon: ShieldCheck,
     requiresSecurityReportAccess: true,
     openInNewTab: true,
+    feature: "administration",
   },
 ] as const;
 
@@ -205,6 +224,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             // No role and not Admin = no legitimate use for any screen —
             // this must win over every other check below.
             if (noRoleBlocked) return null;
+            // Release gate — wins over every role check below too. A
+            // module outside the current release is invisible regardless
+            // of who's looking at it.
+            if ("feature" in item && !FEATURES[item.feature]) return null;
             if ("requiresAllocationAccess" in item && !canSeeAllocation) return null;
             if ("requiresTesterAccess" in item && !canSeeTesterNav) return null;
             if ("requiresApproverAccess" in item && !canSeeApproverNav) return null;

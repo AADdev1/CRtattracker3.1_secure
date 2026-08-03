@@ -25,6 +25,7 @@ import {
 import { Search, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useAppUser } from "@/lib/app-user";
+import { FEATURES } from "@/lib/release-config";
 import {
   listAllCrsForTesting,
   submitTestCases,
@@ -55,7 +56,7 @@ function testedPct(tested: number, total: number): string {
 function TestCaseUploadPage() {
   const navigate = useNavigate();
   const { isAdmin, role, isLoading: userLoading } = useAppUser();
-  const canAccess = isAdmin || role === "Tester";
+  const canAccess = FEATURES.testing && (isAdmin || role === "Tester");
 
   useEffect(() => {
     if (!userLoading && !canAccess) navigate({ to: "/" });

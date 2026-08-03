@@ -16,6 +16,7 @@
 import * as XLSX from "xlsx";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
+import { assertFeatureEnabled } from "@/lib/release-config";
 import { assertFileSizeOk, assertRowCountOk } from "@/lib/upload-limits";
 import type { Database } from "@/integrations/supabase/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -36,6 +37,7 @@ export interface TestCaseUploadRow {
 // manually-entered number. Unscoped like the rest of test case management:
 // a CR's completion isn't tied to who's viewing it.
 export const getTestCaseCompletionByCr = createServerFn({ method: "GET" }).handler(async () => {
+  assertFeatureEnabled("testing");
   assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: testCases, error } = await supabaseAdmin
@@ -60,6 +62,7 @@ export const getTestCaseCompletionByCr = createServerFn({ method: "GET" }).handl
 });
 
 export const listAllCrsForTesting = createServerFn({ method: "GET" }).handler(async () => {
+  assertFeatureEnabled("testing");
   const { isAdmin, role } = await requireSessionUser();
   if (!isAdmin && role !== "Tester")
     throw new Error("Forbidden: only Testers can view this screen");
@@ -118,6 +121,7 @@ export const listAllCrsForTesting = createServerFn({ method: "GET" }).handler(as
 export const uploadTestCases = createServerFn({ method: "POST" })
   .inputValidator((data: { crNumber: string; rows: TestCaseUploadRow[] }) => data)
   .handler(async ({ data }) => {
+    assertFeatureEnabled("testing");
     const { userName, isAdmin, role } = await requireSessionUser();
     if (!isAdmin && role !== "Tester")
       throw new Error("Forbidden: only Testers can upload test cases");
@@ -189,6 +193,7 @@ export const uploadTestCases = createServerFn({ method: "POST" })
 export const submitTestCases = createServerFn({ method: "POST" })
   .inputValidator((data: { crNumber: string }) => data)
   .handler(async ({ data }) => {
+    assertFeatureEnabled("testing");
     const { isAdmin, role } = await requireSessionUser();
     if (!isAdmin && role !== "Tester")
       throw new Error("Forbidden: only Testers can submit test cases");
@@ -219,6 +224,7 @@ export const updateExecutionStatus = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data }) => {
+    assertFeatureEnabled("testing");
     const { role } = await requireSessionUser();
     if (role !== "Tester") {
       throw new Error("Forbidden: only Testers can update execution status");
@@ -259,6 +265,7 @@ export const updateExecutionStatus = createServerFn({ method: "POST" })
 // mechanism as scoped-data.functions.ts — plus spoc_applications, rather
 // than a new per-CR approver table.
 export const listSubmittedForApproval = createServerFn({ method: "GET" }).handler(async () => {
+  assertFeatureEnabled("testing");
   const { userName, isAdmin, role, isTestCaseApprover, spocApplications } =
     await requireSessionUser();
   // A no-role account can't use the approver flag to get in — the flag is
@@ -314,6 +321,7 @@ export const listSubmittedForApproval = createServerFn({ method: "GET" }).handle
 export const updateApproverComment = createServerFn({ method: "POST" })
   .inputValidator((data: { testCaseId: string; comment: string | null }) => data)
   .handler(async ({ data }) => {
+    assertFeatureEnabled("testing");
     const { userName, isAdmin, role, isTestCaseApprover, spocApplications } =
       await requireSessionUser();
     // A no-role account can't use the approver flag to get in — the flag
@@ -370,6 +378,7 @@ async function assertApproverForCr(
 export const approveTestCases = createServerFn({ method: "POST" })
   .inputValidator((data: { crNumber: string }) => data)
   .handler(async ({ data }) => {
+    assertFeatureEnabled("testing");
     const { userName, isAdmin, role, isTestCaseApprover, spocApplications } =
       await requireSessionUser();
     // A no-role account can't use the approver flag to get in — the flag
@@ -400,6 +409,7 @@ export const approveTestCases = createServerFn({ method: "POST" })
 export const sendBackTestCases = createServerFn({ method: "POST" })
   .inputValidator((data: { crNumber: string; overallComment?: string | null }) => data)
   .handler(async ({ data }) => {
+    assertFeatureEnabled("testing");
     const { userName, isAdmin, role, isTestCaseApprover, spocApplications } =
       await requireSessionUser();
     // A no-role account can't use the approver flag to get in — the flag
@@ -444,6 +454,7 @@ export const sendBackTestCases = createServerFn({ method: "POST" })
 export const getCrTestingHeader = createServerFn({ method: "GET" })
   .inputValidator((data: { crNumber: string }) => data)
   .handler(async ({ data }) => {
+    assertFeatureEnabled("testing");
     assertHasRoleOrAdmin(await requireSessionUser());
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: cr, error } = await supabaseAdmin
@@ -462,6 +473,7 @@ export const getCrTestingHeader = createServerFn({ method: "GET" })
 export const getTestCases = createServerFn({ method: "GET" })
   .inputValidator((data: { crNumber: string }) => data)
   .handler(async ({ data }) => {
+    assertFeatureEnabled("testing");
     assertHasRoleOrAdmin(await requireSessionUser());
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows, error } = await supabaseAdmin

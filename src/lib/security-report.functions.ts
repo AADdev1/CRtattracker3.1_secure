@@ -7,8 +7,10 @@
 // content only crosses the wire when a session with the right role calls it.
 import { createServerFn } from "@tanstack/react-start";
 import { requireSessionUser } from "@/lib/gate.functions";
+import { assertFeatureEnabled } from "@/lib/release-config";
 
 export const getSecurityReport = createServerFn({ method: "GET" }).handler(async () => {
+  assertFeatureEnabled("administration");
   const { isAdmin, role } = await requireSessionUser();
   if (!isAdmin && role !== "ITPM") {
     throw new Error("Forbidden: only Admin or ITPM can view the security report");

@@ -39,6 +39,7 @@ import { recalculateAllKpis } from "@/lib/kpi-engine";
 import { getWorkflowStatuses } from "@/lib/workflow-statuses.functions";
 import { listKpis, listKpiExcludedStatuses, saveKpi, deleteKpi } from "@/lib/kpi-config.functions";
 import { useAppUser } from "@/lib/app-user";
+import { FEATURES } from "@/lib/release-config";
 
 export const Route = createFileRoute("/kpis")({
   head: () => ({ meta: [{ title: "KPI Configuration · Kpisavvy" }] }),
@@ -77,8 +78,10 @@ function KpiConfigPage() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<KpiForm | null>(null);
   // No role and not Admin = no legitimate use for this screen — matches
-  // the server-side assertHasRoleOrAdmin() gate on listKpis/etc.
-  const noRoleBlocked = !userLoading && !isAdmin && role == null;
+  // the server-side assertHasRoleOrAdmin() gate on listKpis/etc. Also
+  // gated behind the administration release flag, matching
+  // assertFeatureEnabled("administration") on those same server functions.
+  const noRoleBlocked = !userLoading && (!FEATURES.administration || (!isAdmin && role == null));
 
   const kpis = useQuery({
     queryKey: ["kpis"],

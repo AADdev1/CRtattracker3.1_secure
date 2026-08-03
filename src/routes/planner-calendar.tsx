@@ -21,6 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAppUser } from "@/lib/app-user";
+import { FEATURES } from "@/lib/release-config";
 import { HARDCODED_HOLIDAYS_2026, isWorkingDay, toIsoDateKey } from "@/lib/working-days";
 import { listPlannerGrid } from "@/lib/cr-planner.functions";
 
@@ -208,7 +209,7 @@ function buildMonthSummary(bars: Bar[], monthCursor: Date): Record<Lane, LaneSum
 function PlannerCalendarPage() {
   const { role, isAdmin, isLoading } = useAppUser();
   const navigate = useNavigate();
-  const canAccess = isAdmin || role === "ITPM";
+  const canAccess = FEATURES.planner && (isAdmin || role === "ITPM");
 
   useEffect(() => {
     if (!isLoading && !canAccess) navigate({ to: "/" });

@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils";
 import { useAppUser } from "@/lib/app-user";
+import { FEATURES } from "@/lib/release-config";
 import { addWorkingDays } from "@/lib/working-days";
 import {
   addCrsToPlanner,
@@ -108,7 +109,7 @@ const EMPTY_ROWS: PlannerGridRow[] = [];
 function CrPlannerPage() {
   const { role, isAdmin, isLoading } = useAppUser();
   const navigate = useNavigate();
-  const canAccess = role === "ITPM" || isAdmin;
+  const canAccess = FEATURES.planner && (role === "ITPM" || isAdmin);
 
   useEffect(() => {
     if (!isLoading && !canAccess) navigate({ to: "/" });

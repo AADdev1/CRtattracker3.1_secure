@@ -26,6 +26,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
+import { assertFeatureEnabled } from "@/lib/release-config";
 import { recalculateForCr } from "@/lib/kpi-engine";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -62,6 +63,7 @@ export const DEPLOYMENT_TERMINAL_WORKFLOW_STATUSES = new Set([
 ]);
 
 async function assertDeploymentActor() {
+  assertFeatureEnabled("deployment");
   const session = await requireSessionUser();
   if (session.role !== "PMO" && session.role !== "ITPM" && session.role !== "BA") {
     throw new Error("Forbidden: only PMO, ITPM, or BA can manage deployments");
@@ -159,6 +161,7 @@ async function loadAssignedCrStats(supabaseAdmin: SupabaseClient<Database>, user
 // ─────────────────────────── Reads ───────────────────────────
 
 export const listDeploymentSchedules = createServerFn({ method: "GET" }).handler(async () => {
+  assertFeatureEnabled("deployment");
   const session = await requireSessionUser();
   assertHasRoleOrAdmin(session);
   const { isAdmin, userName, role } = session;
@@ -188,6 +191,7 @@ export const listDeploymentSchedules = createServerFn({ method: "GET" }).handler
 });
 
 export const listPlannedSchedules = createServerFn({ method: "GET" }).handler(async () => {
+  assertFeatureEnabled("deployment");
   assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
@@ -204,6 +208,7 @@ export const listPlannedSchedules = createServerFn({ method: "GET" }).handler(as
 // crs.tsx uses for its application filter, just computed server-side
 // since this page doesn't otherwise load the full CR list.
 export const listCrApplications = createServerFn({ method: "GET" }).handler(async () => {
+  assertFeatureEnabled("deployment");
   assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
@@ -225,6 +230,7 @@ export const listCrApplications = createServerFn({ method: "GET" }).handler(asyn
 // from crs alone. PMO/Admin see every eligible CR; ITPM/BA see only CRs
 // where they're the BA/ITPM.
 export const listEligibleCrsForPlanning = createServerFn({ method: "GET" }).handler(async () => {
+  assertFeatureEnabled("deployment");
   const session = await requireSessionUser();
   assertHasRoleOrAdmin(session);
   const { isAdmin, userName, role } = session;
@@ -252,6 +258,7 @@ export const listEligibleCrsForPlanning = createServerFn({ method: "GET" }).hand
 });
 
 export const getDeploymentDashboardSummary = createServerFn({ method: "GET" }).handler(async () => {
+  assertFeatureEnabled("deployment");
   const session = await requireSessionUser();
   assertHasRoleOrAdmin(session);
   const { isAdmin, userName, role } = session;
@@ -293,6 +300,7 @@ export const getDeploymentDashboardSummary = createServerFn({ method: "GET" }).h
 // keyed by cr_number, merged client-side into a Map, no SQL join needed
 // on the caller's side).
 export const getDeploymentInfoByCr = createServerFn({ method: "GET" }).handler(async () => {
+  assertFeatureEnabled("deployment");
   assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -311,6 +319,7 @@ export const getDeploymentInfoByCr = createServerFn({ method: "GET" }).handler(a
 export const getDeploymentScheduleCrs = createServerFn({ method: "GET" })
   .inputValidator((data: { scheduleId: string }) => data)
   .handler(async ({ data }) => {
+    assertFeatureEnabled("deployment");
     assertHasRoleOrAdmin(await requireSessionUser());
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 

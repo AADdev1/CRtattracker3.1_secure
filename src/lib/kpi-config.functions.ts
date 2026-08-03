@@ -4,6 +4,7 @@
 // client instead of the anon client.
 import { createServerFn } from "@tanstack/react-start";
 import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
+import { assertFeatureEnabled } from "@/lib/release-config";
 
 interface KpiFormInput {
   id?: string;
@@ -20,6 +21,7 @@ interface KpiFormInput {
 }
 
 export const listKpis = createServerFn({ method: "GET" }).handler(async () => {
+  assertFeatureEnabled("administration");
   assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin.from("kpis").select("*").order("name");
@@ -28,6 +30,7 @@ export const listKpis = createServerFn({ method: "GET" }).handler(async () => {
 });
 
 export const listKpiExcludedStatuses = createServerFn({ method: "GET" }).handler(async () => {
+  assertFeatureEnabled("administration");
   assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
@@ -40,6 +43,7 @@ export const listKpiExcludedStatuses = createServerFn({ method: "GET" }).handler
 export const saveKpi = createServerFn({ method: "POST" })
   .inputValidator((data: KpiFormInput) => data)
   .handler(async ({ data: form }) => {
+    assertFeatureEnabled("administration");
     const { isAdmin } = await requireSessionUser();
     if (!isAdmin) throw new Error("Forbidden: only Admin can configure KPIs");
     if (!form.name || !form.start_status_code || !form.end_status_code) {
@@ -79,6 +83,7 @@ export const saveKpi = createServerFn({ method: "POST" })
 export const deleteKpi = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string }) => data)
   .handler(async ({ data }) => {
+    assertFeatureEnabled("administration");
     const { isAdmin } = await requireSessionUser();
     if (!isAdmin) throw new Error("Forbidden: only Admin can configure KPIs");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

@@ -33,6 +33,7 @@ import {
 import { ArrowLeft, Download, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useAppUser } from "@/lib/app-user";
+import { FEATURES } from "@/lib/release-config";
 import {
   getCrTestingHeader,
   getTestCases,
@@ -77,8 +78,9 @@ function TestCaseReviewPage() {
   const [draftExecutionStatus, setDraftExecutionStatus] = useState<Record<string, string>>({});
   // No role and not Admin = no legitimate use for this screen — matches
   // the server-side assertHasRoleOrAdmin() gate on getCrTestingHeader/
-  // getTestCases.
-  const blocked = !userLoading && !isAdmin && role == null;
+  // getTestCases. Also gated behind the testing release flag, matching
+  // assertFeatureEnabled("testing") on those same server functions.
+  const blocked = !userLoading && (!FEATURES.testing || (!isAdmin && role == null));
 
   useEffect(() => {
     if (blocked) navigate({ to: "/" });

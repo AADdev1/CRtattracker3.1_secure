@@ -9,6 +9,7 @@
 // own, it just mirrors what's already scheduled there.
 import { createServerFn } from "@tanstack/react-start";
 import { requireSessionUser } from "@/lib/gate.functions";
+import { assertFeatureEnabled } from "@/lib/release-config";
 import { addWorkingDays, toIsoDateKey } from "@/lib/working-days";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -18,6 +19,7 @@ type PlannerRow = Database["public"]["Tables"]["cr_planner"]["Row"];
 // style function-of-record, not an Admin one, matching the spec's
 // "Visible only for ITPM users" literally for the write path.
 async function assertPlannerActor() {
+  assertFeatureEnabled("planner");
   const session = await requireSessionUser();
   if (session.role !== "ITPM") {
     throw new Error("Forbidden: CR Planner is available to ITPM only");
@@ -29,6 +31,7 @@ async function assertPlannerActor() {
 // on the planner grid and PROD Date list, without unlocking any of the
 // edit/add actions above (those still go through assertPlannerActor).
 async function assertPlannerViewer() {
+  assertFeatureEnabled("planner");
   const session = await requireSessionUser();
   if (session.role !== "ITPM" && !session.isAdmin) {
     throw new Error("Forbidden: CR Planner is available to ITPM and Admin only");

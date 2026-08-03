@@ -39,6 +39,7 @@ import {
 import { ArrowLeft, CalendarIcon, Plus } from "lucide-react";
 import { DeploymentStageBadge } from "@/components/deployment-stage-badge";
 import { useAppUser } from "@/lib/app-user";
+import { FEATURES } from "@/lib/release-config";
 import {
   assignCrsToDeployment,
   createDeploymentSchedule,
@@ -71,7 +72,8 @@ function statusBadgeVariant(status: string): "default" | "secondary" | "destruct
 function DeploymentPlanningPage() {
   const { isAdmin, role, isLoading } = useAppUser();
   const navigate = useNavigate();
-  const canAccess = isAdmin || role === "PMO" || role === "ITPM" || role === "BA";
+  const canAccess =
+    FEATURES.deployment && (isAdmin || role === "PMO" || role === "ITPM" || role === "BA");
   const canManage = role === "PMO" || role === "ITPM" || role === "BA";
 
   useEffect(() => {

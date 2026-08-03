@@ -3,17 +3,27 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { useAppUser } from "@/lib/app-user";
+import { FEATURES } from "@/lib/release-config";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  listDefectStatusMapping, listUnmappedDefectStatuses, toggleDefectStatusOpen, addDefectStatus, removeDefectStatus,
+  listDefectStatusMapping,
+  listUnmappedDefectStatuses,
+  toggleDefectStatusOpen,
+  addDefectStatus,
+  removeDefectStatus,
 } from "@/lib/defect-status.functions";
 
 export const Route = createFileRoute("/defect-statuses")({
@@ -24,12 +34,13 @@ export const Route = createFileRoute("/defect-statuses")({
 function DefectStatusMapping() {
   const { isAdmin, isLoading } = useAppUser();
   const navigate = useNavigate();
+  const canAccess = FEATURES.administration && isAdmin;
 
   useEffect(() => {
-    if (!isLoading && !isAdmin) navigate({ to: "/" });
-  }, [isLoading, isAdmin, navigate]);
+    if (!isLoading && !canAccess) navigate({ to: "/" });
+  }, [isLoading, canAccess, navigate]);
 
-  if (isLoading || !isAdmin) return null;
+  if (isLoading || !canAccess) return null;
 
   return <DefectStatusMappingView />;
 }
@@ -97,7 +108,10 @@ function DefectStatusMappingView() {
               value={newStatus}
               onChange={(e) => setNewStatus(e.target.value)}
             />
-            <Button onClick={() => newStatus.trim() && add.mutate(newStatus.trim())} disabled={!newStatus.trim() || add.isPending}>
+            <Button
+              onClick={() => newStatus.trim() && add.mutate(newStatus.trim())}
+              disabled={!newStatus.trim() || add.isPending}
+            >
               <Plus className="size-4" /> Add
             </Button>
           </CardContent>

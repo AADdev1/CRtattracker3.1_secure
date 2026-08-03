@@ -3,13 +3,16 @@
 // service-role client now instead of the anon client.
 import { createServerFn } from "@tanstack/react-start";
 import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
+import { assertFeatureEnabled } from "@/lib/release-config";
 
 async function assertAdmin() {
+  assertFeatureEnabled("administration");
   const { isAdmin } = await requireSessionUser();
   if (!isAdmin) throw new Error("Forbidden: admin only");
 }
 
 export const listDefectStatusMapping = createServerFn({ method: "GET" }).handler(async () => {
+  assertFeatureEnabled("administration");
   assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
@@ -22,6 +25,7 @@ export const listDefectStatusMapping = createServerFn({ method: "GET" }).handler
 });
 
 export const listUnmappedDefectStatuses = createServerFn({ method: "GET" }).handler(async () => {
+  assertFeatureEnabled("administration");
   assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin.from("defects").select("new_status");
