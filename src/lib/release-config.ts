@@ -15,7 +15,7 @@ export const FEATURES = {
   // Progress.
   testing: true,
   // Release 3 (part 1) — CR Planner, Planner Calendar.
-  planner: false,
+  planner: true,
   // Release 3 (part 2) — Deployment Planning, Deployment Status
   // Tracking, Production Deployment Workflow.
   deployment: false,
