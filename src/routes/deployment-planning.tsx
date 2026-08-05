@@ -70,11 +70,17 @@ function statusBadgeVariant(status: string): "default" | "secondary" | "destruct
 }
 
 function DeploymentPlanningPage() {
-  const { isAdmin, role, isLoading } = useAppUser();
+  const { isAdmin, role, userName, isLoading } = useAppUser();
   const navigate = useNavigate();
   const canAccess =
     FEATURES.deployment && (isAdmin || role === "PMO" || role === "ITPM" || role === "BA");
   const canManage = role === "PMO" || role === "ITPM" || role === "BA";
+  // Creating, editing, or completing a schedule record itself
+  // (createDeploymentSchedule/updateDeploymentSchedule/
+  // markDeploymentScheduleCompleted, all via assertPmoScheduleActor
+  // server-side) is PMO-only — ITPM/BA keep canManage only for assigning/
+  // removing CRs and progressing a CR's deployment stage (their own CRs only).
+  const canManageSchedule = role === "PMO";
 
   useEffect(() => {
     if (!isLoading && !canAccess) navigate({ to: "/" });
@@ -82,10 +88,27 @@ function DeploymentPlanningPage() {
 
   if (isLoading || !canAccess) return null;
 
-  return <DeploymentPlanningView canManage={canManage} />;
+  return (
+    <DeploymentPlanningView
+      canManage={canManage}
+      canManageSchedule={canManageSchedule}
+      role={role}
+      userName={userName}
+    />
+  );
 }
 
-function DeploymentPlanningView({ canManage }: { canManage: boolean }) {
+function DeploymentPlanningView({
+  canManage,
+  canManageSchedule,
+  role,
+  userName,
+}: {
+  canManage: boolean;
+  canManageSchedule: boolean;
+  role: string | null;
+  userName: string | null;
+}) {
   const qc = useQueryClient();
   const listSchedulesFn = useServerFn(listDeploymentSchedules);
   const listApplicationsFn = useServerFn(listCrApplications);
@@ -266,7 +289,7 @@ function DeploymentPlanningView({ canManage }: { canManage: boolean }) {
         title="Deployment Planning"
         description="Create deployment schedules, assign active CRs to them, and track them through to production."
         actions={
-          canManage ? (
+          canManageSchedule ? (
             <Dialog
               open={createOpen}
               onOpenChange={(o) => {
@@ -367,7 +390,7 @@ function DeploymentPlanningView({ canManage }: { canManage: boolean }) {
                         <TableCell>{s.application}</TableCell>
                         <TableCell>{new Date(s.deployment_date).toLocaleDateString()}</TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          {canManage && s.status === "Planned" ? (
+                          {canManageSchedule && s.status === "Planned" ? (
                             <Select
                               value={s.status}
                               onValueChange={(v) => {
@@ -536,6 +559,14 @@ function DeploymentPlanningView({ canManage }: { canManage: boolean }) {
                   {(scheduleCrs.data ?? []).map((c) => {
                     const locked =
                       !c.deployment_stage || c.deployment_stage === "Deployed to Production";
+                    // PMO can progress any CR's stage (server re-checks their
+                    // spoc_applications); ITPM/BA only the CRs they're
+                    // actually the ba/itpm for — mirrors the server-side
+                    // ownership check in updateDeploymentStage.
+                    const canEditStage =
+                      role === "PMO" ||
+                      ((role === "ITPM" || role === "BA") &&
+                        (c.itpm === userName || c.ba === userName));
                     return (
                       <TableRow key={c.cr_number}>
                         <TableCell className="font-medium">{c.cr_number}</TableCell>
@@ -547,7 +578,7 @@ function DeploymentPlanningView({ canManage }: { canManage: boolean }) {
                           {c.workflow_status}
                         </TableCell>
                         <TableCell>
-                          {canManage && !locked ? (
+                          {canEditStage && !locked ? (
                             <Select
                               value={c.deployment_stage ?? undefined}
                               onValueChange={(v) =>

@@ -778,6 +778,30 @@ export type Database = {
         }
         Relationships: []
       }
+      security_events: {
+        Row: {
+          actor_email: string | null
+          created_at: string
+          detail: Json | null
+          event_type: string
+          id: string
+        }
+        Insert: {
+          actor_email?: string | null
+          created_at?: string
+          detail?: Json | null
+          event_type: string
+          id?: string
+        }
+        Update: {
+          actor_email?: string | null
+          created_at?: string
+          detail?: Json | null
+          event_type?: string
+          id?: string
+        }
+        Relationships: []
+      }
       test_cases: {
         Row: {
           approval_date: string | null
@@ -856,6 +880,7 @@ export type Database = {
         Row: {
           auth_user_id: string | null
           created_at: string
+          current_session_id: string | null
           email: string
           id: string
           is_active: boolean
@@ -870,6 +895,7 @@ export type Database = {
         Insert: {
           auth_user_id?: string | null
           created_at?: string
+          current_session_id?: string | null
           email: string
           id?: string
           is_active?: boolean
@@ -884,6 +910,7 @@ export type Database = {
         Update: {
           auth_user_id?: string | null
           created_at?: string
+          current_session_id?: string | null
           email?: string
           id?: string
           is_active?: boolean

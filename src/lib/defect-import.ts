@@ -7,8 +7,15 @@
 // the anon client can no longer do any of this directly.
 import Papa from "papaparse";
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSessionUser } from "@/lib/gate.functions";
-import { assertFileSizeOk, assertRowCountOk } from "@/lib/upload-limits";
+import { assertFileSizeOk, assertPayloadSizeOk, assertRowCountOk } from "@/lib/upload-limits";
+import { validated } from "@/lib/validation";
+
+// Same reasoning as csv-import.ts: no per-cell cap (bulk CMS data can
+// legitimately exceed 500 chars in some columns), row count already
+// capped by assertRowCountOk below — this just guards row shape.
+const csvRows = z.array(z.record(z.string(), z.string()));
 
 const FIELD_MAP: Record<string, string> = {
   "Defect No": "defect_no",
@@ -55,13 +62,14 @@ export interface DefectImportResult {
 }
 
 const importDefectRows = createServerFn({ method: "POST" })
-  .inputValidator((data: { rows: Record<string, string>[] }) => data)
+  .inputValidator(validated(z.object({ rows: csvRows })))
   .handler(async ({ data: { rows } }): Promise<DefectImportResult> => {
     const { isAdmin, role } = await requireSessionUser();
     if (!isAdmin && role !== "PMO" && role !== "BA" && role !== "ITPM") {
       throw new Error("Forbidden: only Admin, PMO, BA, or ITPM can import defect data");
     }
     assertRowCountOk(rows.length);
+    assertPayloadSizeOk(rows);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Load all CR numbers for validation.

@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Check, ChevronsUpDown, X } from "lucide-react";
+import { Check, ChevronsUpDown, Download, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,6 +47,7 @@ import { cn } from "@/lib/utils";
 import { useAppUser } from "@/lib/app-user";
 import { FEATURES } from "@/lib/release-config";
 import { addWorkingDays } from "@/lib/working-days";
+import { downloadExcel, sanitizeCell } from "@/lib/export-excel";
 import {
   addCrsToPlanner,
   listActiveCrsForPlanner,
@@ -267,11 +268,45 @@ function CrPlannerView({ canEdit }: { canEdit: boolean }) {
     </TableHead>
   );
 
+  // Exports every filtered/sorted row (not just the current page) — the
+  // same `sorted` array the grid paginates over.
+  function handleExport() {
+    const rows = sorted.map((r) => {
+      const ac = ageDays(r.dateCreated);
+      const am = ageDays(r.dateModified);
+      return {
+        "CR Number": sanitizeCell(r.crNumber),
+        Title: sanitizeCell(r.title ?? ""),
+        Developer: sanitizeCell(r.devResource ?? ""),
+        "Dev Effort": r.devEffort ?? "",
+        "Dev Start Date": fmtDate(r.devStartDate),
+        "Dev End Date": fmtDate(r.devEndDate),
+        "SIT Effort": r.sitEffort ?? "",
+        "SIT Start Date": fmtDate(r.sitStartDate),
+        "UAT Date": fmtDate(r.uatDate),
+        "PROD Date": fmtDate(r.prodDate),
+        Remarks: sanitizeCell(r.remarks ?? ""),
+        "Date Created": fmtTimestamp(r.dateCreated),
+        "Date Modified": fmtTimestamp(r.dateModified),
+        "Created User": sanitizeCell(r.createdUser ?? ""),
+        "Workflow Status": sanitizeCell(r.workflowStatus ?? ""),
+        "CR Aging": ac ?? "",
+        "Last Updated Aging": am ?? "",
+      };
+    });
+    downloadExcel(`cr-planner-${new Date().toISOString().slice(0, 10)}.xlsx`, "CR Planner", rows);
+  }
+
   return (
     <AppShell>
       <PageHeader
         title="CR Planner"
         description="Plan Development, SIT, UAT, and Production timelines for active CRs."
+        actions={
+          <Button variant="outline" onClick={handleExport}>
+            <Download /> Export
+          </Button>
+        }
       />
       <PageBody>
         {canEdit && (

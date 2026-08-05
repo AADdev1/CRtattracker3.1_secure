@@ -22,6 +22,8 @@ import {
 } from "@/lib/scoped-data.functions";
 import { getWorkflowStatuses } from "@/lib/workflow-statuses.functions";
 import { listUpdatesByCr } from "@/lib/cr-updates.functions";
+import { getTestCases } from "@/lib/test-cases.functions";
+import { FEATURES } from "@/lib/release-config";
 import type { Database } from "@/integrations/supabase/types";
 
 type CrDetailRow = Database["public"]["Tables"]["crs"]["Row"] & { relation: CrRelation };
@@ -57,11 +59,30 @@ function CrDetails() {
     queryFn: () => listUpdatesByCr({ data: { crNumber } }),
   });
 
+  // CR Testing Progress is Release 2 (Testing Governance) scope — don't
+  // fire the request when that release isn't enabled, matching the
+  // server-side assertFeatureEnabled("testing") gate on getTestCases.
+  const testCases = useQuery({
+    queryKey: ["cr-test-cases", crNumber],
+    queryFn: () => getTestCases({ data: { crNumber } }),
+    enabled: FEATURES.testing,
+  });
+
   const cr = data.data?.cr;
   const statuses = (data.data?.statuses ?? []) as WorkflowStatusRow[];
   const results = data.data?.results ?? [];
   const defects = data.data?.defects ?? [];
   const now = Date.now();
+
+  const testCaseRows = testCases.data ?? [];
+  const testedCount = testCaseRows.filter((t) => t.execution_status === "Tested").length;
+  // All current rows for a CR come from the same upload batch (a re-upload
+  // replaces the full set — see test-cases.functions.ts) — the most
+  // recently uploaded row's uploaded_by is the tester of record.
+  const latestTestUpload = testCaseRows.reduce<(typeof testCaseRows)[number] | null>(
+    (latest, t) => (!latest || t.uploaded_date > latest.uploaded_date ? t : latest),
+    null,
+  );
 
   if (data.isLoading) {
     return (
@@ -93,11 +114,20 @@ function CrDetails() {
         title={cr.cr_number}
         description={cr.title ?? undefined}
         actions={
-          <Button asChild variant="outline">
-            <Link to="/crs">
-              <ArrowLeft /> Back
-            </Link>
-          </Button>
+          <div className="flex gap-2">
+            {FEATURES.testing && (
+              <Button asChild variant="outline">
+                <Link to="/test-case-review/$crNumber" params={{ crNumber: cr.cr_number }}>
+                  View Test Results
+                </Link>
+              </Button>
+            )}
+            <Button asChild variant="outline">
+              <Link to="/crs">
+                <ArrowLeft /> Back
+              </Link>
+            </Button>
+          </div>
         }
       />
       <PageBody>
@@ -119,6 +149,28 @@ function CrDetails() {
               <Field label="Assigned User" value={cr.assigned_user} />
               <Field label="Date Created" value={fmt(cr.date_created)} />
               <Field label="Expected Go Live" value={fmt(cr.expected_go_live_date)} />
+              {FEATURES.testing && (
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Testing Progress
+                  </dt>
+                  <dd className="mt-0.5">
+                    {testCaseRows.length > 0 ? (
+                      <Link
+                        to="/test-case-review/$crNumber"
+                        params={{ crNumber: cr.cr_number }}
+                        className="text-primary hover:underline"
+                      >
+                        {testedCount}/{testCaseRows.length} (
+                        {Math.round((testedCount / testCaseRows.length) * 100)}%)
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground italic">No test cases uploaded</span>
+                    )}
+                  </dd>
+                </div>
+              )}
+              {FEATURES.testing && <Field label="Tester" value={latestTestUpload?.uploaded_by} />}
             </dl>
             {cr.manual_notes && (
               <div className="mt-4 p-3 bg-muted rounded-md text-sm">

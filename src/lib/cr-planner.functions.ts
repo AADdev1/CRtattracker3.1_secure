@@ -7,10 +7,17 @@
 // the Deployment Planning module's deployment_schedule table, filtered to
 // status = 'Planned' — CR Planner has no "add a date" capability of its
 // own, it just mirrors what's already scheduled there.
+//
+// Visibility is scoped to assigned CRs: listActiveCrsForPlanner (ITPM-only)
+// and listPlannerGrid only show CRs where the caller is the CR's assigned
+// itpm. Admin keeps the app-wide "read-only everywhere" baseline on the
+// planner grid and sees every entry, unfiltered.
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSessionUser } from "@/lib/gate.functions";
 import { assertFeatureEnabled } from "@/lib/release-config";
 import { addWorkingDays, toIsoDateKey } from "@/lib/working-days";
+import { text, optionalText, validated } from "@/lib/validation";
 import type { Database } from "@/integrations/supabase/types";
 
 type PlannerRow = Database["public"]["Tables"]["cr_planner"]["Row"];
@@ -59,9 +66,11 @@ const PLANNER_EXCLUDED_WORKFLOW_STATUSES = new Set([
 // ─────────────────────────── Reads ───────────────────────────
 
 // Active CRs eligible to be added to the planner: not dropped, not at a
-// Deployed/Closed terminal status, and not already in cr_planner.
+// Deployed/Closed terminal status, not already in cr_planner, and — since
+// this list is ITPM-only (assertPlannerActor) — scoped to CRs where the
+// caller is actually the assigned ITPM.
 export const listActiveCrsForPlanner = createServerFn({ method: "GET" }).handler(async () => {
-  await assertPlannerActor();
+  const { userName } = await assertPlannerActor();
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   // is_dropped is nullable in the live table (not every row has it
@@ -72,7 +81,7 @@ export const listActiveCrsForPlanner = createServerFn({ method: "GET" }).handler
   const [{ data: crs, error: crsErr }, { data: planned, error: plannedErr }] = await Promise.all([
     supabaseAdmin
       .from("crs")
-      .select("cr_number, title, workflow_status")
+      .select("cr_number, title, workflow_status, itpm")
       .or("is_dropped.is.null,is_dropped.eq.false"),
     supabaseAdmin.from("cr_planner").select("cr_number"),
   ]);
@@ -82,6 +91,7 @@ export const listActiveCrsForPlanner = createServerFn({ method: "GET" }).handler
   const alreadyPlanned = new Set((planned ?? []).map((p) => p.cr_number));
 
   return (crs ?? [])
+    .filter((c) => c.itpm === userName)
     .filter((c) => !alreadyPlanned.has(c.cr_number))
     .filter((c) => !c.workflow_status || !PLANNER_EXCLUDED_WORKFLOW_STATUSES.has(c.workflow_status))
     .map((c) => ({ cr_number: c.cr_number, title: c.title }));
@@ -90,8 +100,10 @@ export const listActiveCrsForPlanner = createServerFn({ method: "GET" }).handler
 // The planner grid — every cr_planner row, merged with its read-only
 // display fields from crs (no SQL join, same client-side-merge style
 // already used throughout this codebase, e.g. crs.tsx's defectStats map).
+// ITPM only sees entries for CRs where they're the assigned ITPM; Admin
+// keeps the app-wide "read-only everywhere" baseline and sees every entry.
 export const listPlannerGrid = createServerFn({ method: "GET" }).handler(async () => {
-  await assertPlannerViewer();
+  const { userName, isAdmin } = await assertPlannerViewer();
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: planner, error: plannerErr } = await supabaseAdmin.from("cr_planner").select("*");
@@ -100,7 +112,7 @@ export const listPlannerGrid = createServerFn({ method: "GET" }).handler(async (
 
   const { data: crs, error: crsErr } = await supabaseAdmin
     .from("crs")
-    .select("cr_number, title, date_created, date_modified, created_user, workflow_status")
+    .select("cr_number, title, date_created, date_modified, created_user, workflow_status, itpm")
     .in(
       "cr_number",
       planner.map((p) => p.cr_number),
@@ -109,7 +121,11 @@ export const listPlannerGrid = createServerFn({ method: "GET" }).handler(async (
 
   const crByNumber = new Map((crs ?? []).map((c) => [c.cr_number, c]));
 
-  return planner.map((p) => {
+  const visible = isAdmin
+    ? planner
+    : planner.filter((p) => crByNumber.get(p.cr_number)?.itpm === userName);
+
+  return visible.map((p) => {
     const cr = crByNumber.get(p.cr_number);
     return {
       plannerId: p.planner_id,
@@ -155,7 +171,7 @@ export const listPlannedDeploymentDates = createServerFn({ method: "GET" }).hand
 // hard error for the whole batch) — the route surfaces `skipped` as a
 // "already exists in planner" message per the spec.
 export const addCrsToPlanner = createServerFn({ method: "POST" })
-  .inputValidator((data: { crNumbers: string[] }) => data)
+  .inputValidator(validated(z.object({ crNumbers: z.array(text).max(1000) })))
   .handler(async ({ data }) => {
     const { userName } = await assertPlannerActor();
     if (data.crNumbers.length === 0) throw new Error("Select at least one CR");
@@ -185,19 +201,23 @@ export const addCrsToPlanner = createServerFn({ method: "POST" })
     return { added: toInsert, skipped };
   });
 
-interface UpdatePlannerEntryInput {
-  crNumber: string;
-  devResource?: string | null;
-  devEffort?: number | null;
-  devStartDate?: string | null;
-  sitEffort?: number | null;
-  sitStartDate?: string | null;
-  prodDate?: string | null;
-  remarks?: string | null;
-}
+const optionalNumber = z.number().nullable().optional();
 
 export const updatePlannerEntry = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdatePlannerEntryInput) => data)
+  .inputValidator(
+    validated(
+      z.object({
+        crNumber: text,
+        devResource: optionalText,
+        devEffort: optionalNumber,
+        devStartDate: optionalText,
+        sitEffort: optionalNumber,
+        sitStartDate: optionalText,
+        prodDate: optionalText,
+        remarks: optionalText,
+      }),
+    ),
+  )
   .handler(async ({ data }) => {
     const { userName } = await assertPlannerActor();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

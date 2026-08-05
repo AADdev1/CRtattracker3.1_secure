@@ -34,6 +34,14 @@ function securityHeaders(): Record<string, string> {
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+    // M6 — pages render CR/KPI/test-case/security-report data; browser
+    // disk cache and back-forward cache must not retain it on a shared
+    // device. withSecurityHeaders() below only sets a header when the
+    // response doesn't already have one, so a static asset response that
+    // already carries its own long-lived Cache-Control (hashed filenames)
+    // is untouched — this only lands on responses with none set.
+    "Cache-Control": "no-store, must-revalidate",
+    Pragma: "no-cache",
     "Content-Security-Policy": [
       "default-src 'self'",
       // 'unsafe-inline' is required here: TanStack Start emits an inline

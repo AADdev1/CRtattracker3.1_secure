@@ -9,7 +9,10 @@
 // for anyone calling Supabase's endpoint directly with the public key.
 import { createServerFn } from "@tanstack/react-start";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
+import { logSecurityEvent } from "@/lib/gate.functions";
+import { text, validated } from "@/lib/validation";
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
@@ -66,7 +69,7 @@ async function recordFailedAttempt(
 }
 
 export const signIn = createServerFn({ method: "POST" })
-  .inputValidator((data: { email: string; password: string }) => data)
+  .inputValidator(validated(z.object({ email: text, password: text })))
   .handler(async ({ data }) => {
     const email = data.email.trim().toLowerCase();
     if (!email || !data.password) {
@@ -113,6 +116,21 @@ export const signIn = createServerFn({ method: "POST" })
 
     // Success — clear any prior failure record for this email.
     await supabaseAdmin.from("login_attempts").delete().eq("email", email);
+    await logSecurityEvent("login_success", email);
+
+    // Single-session-per-user (M9): every Supabase Auth JWT carries a
+    // unique session_id claim per login. Recording this login's session_id
+    // as the account's sole recognized one is what "revokes" any prior
+    // login elsewhere — requireSessionUser (gate.functions.ts) rejects any
+    // request whose JWT session_id doesn't match it.
+    const { data: newClaims } = await supabase.auth.getClaims(signInData.session.access_token);
+    const sessionId = newClaims?.claims?.session_id;
+    if (sessionId) {
+      await supabaseAdmin
+        .from("user_management")
+        .update({ current_session_id: sessionId } as never)
+        .eq("email", email);
+    }
 
     return {
       access_token: signInData.session.access_token,

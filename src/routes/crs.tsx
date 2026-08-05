@@ -19,7 +19,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, Pencil, MessageSquarePlus } from "lucide-react";
+import {
+  Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Pencil,
+  MessageSquarePlus,
+  Download,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -49,6 +57,7 @@ import { DeploymentStageBadge } from "@/components/deployment-stage-badge";
 import { MultiSelectFilter } from "@/components/multi-select-filter";
 import { useAppUser } from "@/lib/app-user";
 import { FEATURES } from "@/lib/release-config";
+import { downloadExcel, sanitizeCell } from "@/lib/export-excel";
 
 export const Route = createFileRoute("/crs")({
   head: () => ({ meta: [{ title: "CR Repository · Kpisavvy" }] }),
@@ -288,11 +297,54 @@ function CrRepository() {
     return `${tc.testedCount}/${tc.testCaseCount} (${Math.round((tc.testedCount / tc.testCaseCount) * 100)}%)`;
   };
 
+  // Exports exactly what's on screen — the same filtered/sorted `sorted`
+  // array the table renders from, in the same column order.
+  function handleExport() {
+    const rows = sorted.map((c) => {
+      const ac = ageDays(c.date_created);
+      const am = ageDays(c.date_modified);
+      const ds = defectStats.data?.get(c.cr_number);
+      const dep = deploymentInfo.data?.get(c.cr_number);
+      const row: Record<string, unknown> = {
+        "CR Number": sanitizeCell(c.cr_number),
+        Title: sanitizeCell(c.title ?? ""),
+        Application: sanitizeCell(c.application ?? ""),
+        Severity: sanitizeCell(c.severity ?? ""),
+        "Current Status": sanitizeCell(c.workflow_status ?? ""),
+        Size: sanitizeCell(c.cr_size ?? ""),
+        "Created On": fmt(c.date_created),
+        "Last Modified": fmt(c.date_modified),
+        "Age (Created)": ac ?? "",
+        "Age (Modified)": am ?? "",
+        "Open Defects": ds?.openCount ?? 0,
+        "Max Defect Aging": ds?.maxAgingDays ?? "",
+      };
+      if (FEATURES.testing) row["Tested"] = testingPct(c.cr_number);
+      if (FEATURES.deployment) {
+        row["Planned Deployment Date"] = dep?.planned_deployment_date
+          ? fmt(dep.planned_deployment_date)
+          : "";
+        row["Deployment Stage"] = dep?.deployment_stage ?? "";
+      }
+      return row;
+    });
+    downloadExcel(
+      `cr-repository-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      "CR Repository",
+      rows,
+    );
+  }
+
   return (
     <AppShell>
       <PageHeader
         title="CR Repository"
         description="Browse all imported Change Requests. Click a CR to view its KPI timeline."
+        actions={
+          <Button variant="outline" onClick={handleExport}>
+            <Download /> Export
+          </Button>
+        }
       />
       <PageBody>
         <Card>

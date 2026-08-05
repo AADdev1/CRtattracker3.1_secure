@@ -15,11 +15,22 @@
 // csv-import.ts.
 import * as XLSX from "xlsx";
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
 import { assertFeatureEnabled } from "@/lib/release-config";
-import { assertFileSizeOk, assertRowCountOk } from "@/lib/upload-limits";
+import { assertFileSizeOk, assertPayloadSizeOk, assertRowCountOk } from "@/lib/upload-limits";
+import { text, optionalText, validated } from "@/lib/validation";
 import type { Database } from "@/integrations/supabase/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+const testCaseUploadRowSchema = z.object({
+  test_priority: optionalText,
+  test_case_number: text,
+  test_case_name: text,
+  test_condition: text,
+  expected_result: text,
+  tester_comments: optionalText,
+});
 
 export type TestCaseRow = Database["public"]["Tables"]["test_cases"]["Row"];
 
@@ -119,7 +130,7 @@ export const listAllCrsForTesting = createServerFn({ method: "GET" }).handler(as
 // Tester (or Admin) only. Deletes any existing rows for the CR and inserts
 // the new set fresh — a full re-upload replaces the batch outright.
 export const uploadTestCases = createServerFn({ method: "POST" })
-  .inputValidator((data: { crNumber: string; rows: TestCaseUploadRow[] }) => data)
+  .inputValidator(validated(z.object({ crNumber: text, rows: z.array(testCaseUploadRowSchema) })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
     const { userName, isAdmin, role } = await requireSessionUser();
@@ -127,6 +138,7 @@ export const uploadTestCases = createServerFn({ method: "POST" })
       throw new Error("Forbidden: only Testers can upload test cases");
     if (data.rows.length === 0) throw new Error("No test case rows to upload");
     assertRowCountOk(data.rows.length);
+    assertPayloadSizeOk(data.rows);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -191,7 +203,7 @@ export const uploadTestCases = createServerFn({ method: "POST" })
 // Tester (or Admin) only. Only rows currently Pending move to Submitted —
 // mirrors "tester can upload test cases for any pending CR."
 export const submitTestCases = createServerFn({ method: "POST" })
-  .inputValidator((data: { crNumber: string }) => data)
+  .inputValidator(validated(z.object({ crNumber: text })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
     const { isAdmin, role } = await requireSessionUser();
@@ -217,11 +229,7 @@ export const submitTestCases = createServerFn({ method: "POST" })
 // Defect Raised requires a defect id; any other status clears it.
 export const updateExecutionStatus = createServerFn({ method: "POST" })
   .inputValidator(
-    (data: {
-      testCaseId: string;
-      executionStatus: Database["public"]["Enums"]["test_case_execution_status"];
-      defectId?: string | null;
-    }) => data,
+    validated(z.object({ testCaseId: text, executionStatus: text, defectId: optionalText })),
   )
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
@@ -319,7 +327,7 @@ export const listSubmittedForApproval = createServerFn({ method: "GET" }).handle
 // Approver or Admin only — per-row inline edit (auto-save on blur, same UX
 // as manual_notes in cr-sizes.tsx).
 export const updateApproverComment = createServerFn({ method: "POST" })
-  .inputValidator((data: { testCaseId: string; comment: string | null }) => data)
+  .inputValidator(validated(z.object({ testCaseId: text, comment: text.nullable() })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
     const { userName, isAdmin, role, isTestCaseApprover, spocApplications } =
@@ -376,7 +384,7 @@ async function assertApproverForCr(
 // Approver or Admin only — every Submitted row for the CR moves to
 // Approved, stamped with who/when.
 export const approveTestCases = createServerFn({ method: "POST" })
-  .inputValidator((data: { crNumber: string }) => data)
+  .inputValidator(validated(z.object({ crNumber: text })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
     const { userName, isAdmin, role, isTestCaseApprover, spocApplications } =
@@ -407,7 +415,7 @@ export const approveTestCases = createServerFn({ method: "POST" })
 // Back for Revision. overallComment (if given) fills any row missing its
 // own approver_comments; rows with an existing comment keep it as-is.
 export const sendBackTestCases = createServerFn({ method: "POST" })
-  .inputValidator((data: { crNumber: string; overallComment?: string | null }) => data)
+  .inputValidator(validated(z.object({ crNumber: text, overallComment: optionalText })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
     const { userName, isAdmin, role, isTestCaseApprover, spocApplications } =
@@ -452,7 +460,7 @@ export const sendBackTestCases = createServerFn({ method: "POST" })
 // for the test-case review screen — deliberately NOT relation-scoped like
 // getScopedCrs, since any Tester/approver can look at any CR's test cases.
 export const getCrTestingHeader = createServerFn({ method: "GET" })
-  .inputValidator((data: { crNumber: string }) => data)
+  .inputValidator(validated(z.object({ crNumber: text })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
     assertHasRoleOrAdmin(await requireSessionUser());
@@ -471,7 +479,7 @@ export const getCrTestingHeader = createServerFn({ method: "GET" })
 // used both by the Tester's read-only "View Status" and the approver's
 // review screen; each route enforces its own authorization on top.
 export const getTestCases = createServerFn({ method: "GET" })
-  .inputValidator((data: { crNumber: string }) => data)
+  .inputValidator(validated(z.object({ crNumber: text })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
     assertHasRoleOrAdmin(await requireSessionUser());

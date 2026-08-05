@@ -4,11 +4,22 @@
 // getWorkflowStatuses) — nav visibility narrows who actually sees these
 // screens (see app-shell.tsx), matching how CR Repository/KPI
 // Configuration/etc. are hidden from Testers without the underlying reads
-// being role-locked. Writes (create/update schedule, assign/remove CRs,
-// update stage) are PMO/ITPM/BA only — Admin is deliberately excluded,
-// same decision already made for CR size/notes/workflow-status editing in
-// crs-admin.functions.ts (CR/deployment data entry isn't an Admin
-// function in this app).
+// being role-locked. Deployment schedule visibility is deliberately NOT
+// ownership-scoped: every PMO/ITPM/BA (and Admin) sees every schedule,
+// including ones with none of their own CRs on it — only listEligibleCrsForPlanning
+// (which CRs can be planned) stays scoped, by ba/itpm match for ITPM/BA and
+// by spoc_applications for PMO. Writes (update schedule, assign/remove CRs,
+// update stage) are PMO/ITPM/BA only — Admin is deliberately excluded, same
+// decision already made for CR size/notes/workflow-status editing in
+// crs-admin.functions.ts (CR/deployment data entry isn't an Admin function
+// in this app). Creating a brand-new schedule (createDeploymentSchedule) is
+// narrower still — PMO only, via assertScheduleCreator; ITPM/BA can act on
+// schedules that already exist but can't stand up a new one. Within all of
+// that: PMO may only act on a schedule (or a CR's schedule) whose
+// application is in their user_management.spoc_applications; ITPM/BA may
+// only assign/remove a CR they're actually the ba/itpm for, regardless of
+// which of the two roles they hold (see assertPmoApplicationScope and the
+// inline ba/itpm checks in assignCrsToDeployment/removeCrFromDeployment).
 //
 // UAT Signed Off / Deployed to Production are automatic-only stages,
 // synced from CR CSV import via syncDeploymentStagesForCrs (called from
@@ -23,11 +34,22 @@
 // application disambiguates schedules that share a date; a DB-level
 // partial unique index enforces at most one Planned schedule per
 // (application, date) pair, so that match is never ambiguous.
+//
+// Write-access summary (re-scoped after an ownership-check review):
+// creating/editing/completing a *schedule record itself* (createDeploymentSchedule,
+// updateDeploymentSchedule, markDeploymentScheduleCompleted) is PMO-only —
+// ITPM/BA can view schedules but not edit or complete them — via
+// assertPmoScheduleActor, further scoped to the PMO's spoc_applications.
+// Assigning/removing a CR on a schedule, and progressing a CR's deployment
+// stage, stay open to PMO/ITPM/BA, scoped by ownership: PMO by
+// spoc_applications, ITPM/BA by being the CR's actual ba/itpm.
 import { createServerFn } from "@tanstack/react-start";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
+import { z } from "zod";
+import { requireSessionUser, assertHasRoleOrAdmin, type StaffRole } from "@/lib/gate.functions";
 import { assertFeatureEnabled } from "@/lib/release-config";
 import { recalculateForCr } from "@/lib/kpi-engine";
+import { text, optionalText, validated } from "@/lib/validation";
 import type { Database } from "@/integrations/supabase/types";
 
 export type DeploymentStage = Database["public"]["Enums"]["deployment_stage"];
@@ -67,6 +89,21 @@ async function assertDeploymentActor() {
   const session = await requireSessionUser();
   if (session.role !== "PMO" && session.role !== "ITPM" && session.role !== "BA") {
     throw new Error("Forbidden: only PMO, ITPM, or BA can manage deployments");
+  }
+  return session;
+}
+
+// Creating, editing, or completing a deployment schedule *record* is
+// PMO-only — ITPM/BA can still assign/remove CRs on an existing schedule
+// and progress a CR's deployment stage (their own CRs only), but the
+// schedule record itself (dates/remarks/status/completion) is a PMO
+// privilege, further scoped to applications the PMO is authorised for
+// (see assertPmoApplicationScope).
+async function assertPmoScheduleActor(action: string) {
+  assertFeatureEnabled("deployment");
+  const session = await requireSessionUser();
+  if (session.role !== "PMO") {
+    throw new Error(`Forbidden: only PMO can ${action}`);
   }
   return session;
 }
@@ -136,35 +173,46 @@ function scheduleKey(application: string, deploymentDate: string): string {
   return `${application}::${deploymentDate}`;
 }
 
-// Shared by listDeploymentSchedules/getDeploymentDashboardSummary — both
-// need "how many CRs sit on each schedule" and "which schedules this user
-// can see" (ITPM/BA see only schedules holding a CR they're BA/ITPM for),
-// both derived from the same crs.deployment_date scan.
-async function loadAssignedCrStats(supabaseAdmin: SupabaseClient<Database>, userName: string) {
+// Shared by listDeploymentSchedules/getDeploymentDashboardSummary — "how
+// many CRs sit on each schedule". Schedule visibility itself is not
+// ownership-scoped: every PMO/ITPM/BA/Admin sees every schedule (including
+// ones with none of their own CRs on them) — only the write actions below
+// (assign/remove CRs, PMO's per-application changes) are scoped.
+async function loadCrCountsByScheduleKey(supabaseAdmin: SupabaseClient<Database>) {
   const { data, error } = await supabaseAdmin
     .from("crs")
-    .select("application, deployment_date, ba, itpm")
+    .select("application, deployment_date")
     .not("deployment_date", "is", null);
   if (error) throw new Error(error.message);
 
   const countByKey = new Map<string, number>();
-  const userKeys = new Set<string>();
   for (const c of data ?? []) {
     if (!c.deployment_date) continue;
     const key = scheduleKey(c.application ?? "", c.deployment_date);
     countByKey.set(key, (countByKey.get(key) ?? 0) + 1);
-    if (c.ba === userName || c.itpm === userName) userKeys.add(key);
   }
-  return { countByKey, userKeys };
+  return countByKey;
+}
+
+// PMO may only create/edit/complete a schedule, or assign/remove a CR, for
+// an application in their user_management.spoc_applications list. ITPM/BA
+// are scoped separately, by CR ownership (ba/itpm name match) rather than
+// application — see the checks inline at each write call site.
+function assertPmoApplicationScope(
+  role: StaffRole | null,
+  spocApplications: string[],
+  application: string,
+): void {
+  if (role === "PMO" && !spocApplications.includes(application)) {
+    throw new Error(`Forbidden: ${application} is not in your SPOC application list`);
+  }
 }
 
 // ─────────────────────────── Reads ───────────────────────────
 
 export const listDeploymentSchedules = createServerFn({ method: "GET" }).handler(async () => {
   assertFeatureEnabled("deployment");
-  const session = await requireSessionUser();
-  assertHasRoleOrAdmin(session);
-  const { isAdmin, userName, role } = session;
+  assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: schedules, error } = await supabaseAdmin
@@ -175,16 +223,9 @@ export const listDeploymentSchedules = createServerFn({ method: "GET" }).handler
     .order("deployment_date", { ascending: false });
   if (error) throw new Error(error.message);
 
-  const { countByKey, userKeys } = await loadAssignedCrStats(supabaseAdmin, userName);
+  const countByKey = await loadCrCountsByScheduleKey(supabaseAdmin);
 
-  const visible =
-    isAdmin || role === "PMO"
-      ? (schedules ?? [])
-      : (schedules ?? []).filter((s) =>
-          userKeys.has(scheduleKey(s.application, s.deployment_date)),
-        );
-
-  return visible.map((s) => ({
+  return (schedules ?? []).map((s) => ({
     ...s,
     crCount: countByKey.get(scheduleKey(s.application, s.deployment_date)) ?? 0,
   }));
@@ -233,7 +274,7 @@ export const listEligibleCrsForPlanning = createServerFn({ method: "GET" }).hand
   assertFeatureEnabled("deployment");
   const session = await requireSessionUser();
   assertHasRoleOrAdmin(session);
-  const { isAdmin, userName, role } = session;
+  const { isAdmin, userName, role, spocApplications } = session;
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   // is_dropped is nullable in the live table — matching the convention
@@ -252,16 +293,18 @@ export const listEligibleCrsForPlanning = createServerFn({ method: "GET" }).hand
     (c) => !c.workflow_status || !DEPLOYMENT_TERMINAL_WORKFLOW_STATUSES.has(c.workflow_status),
   );
 
-  return isAdmin || role === "PMO"
-    ? notTerminal
-    : notTerminal.filter((c) => c.ba === userName || c.itpm === userName);
+  if (isAdmin) return notTerminal;
+  // PMO is scoped to CRs whose application is in their
+  // user_management.spoc_applications list, not every eligible CR.
+  if (role === "PMO") {
+    return notTerminal.filter((c) => !!c.application && spocApplications.includes(c.application));
+  }
+  return notTerminal.filter((c) => c.ba === userName || c.itpm === userName);
 });
 
 export const getDeploymentDashboardSummary = createServerFn({ method: "GET" }).handler(async () => {
   assertFeatureEnabled("deployment");
-  const session = await requireSessionUser();
-  assertHasRoleOrAdmin(session);
-  const { isAdmin, userName, role } = session;
+  assertHasRoleOrAdmin(await requireSessionUser());
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: schedules, error } = await supabaseAdmin
@@ -269,16 +312,12 @@ export const getDeploymentDashboardSummary = createServerFn({ method: "GET" }).h
     .select("id, application, deployment_date, status");
   if (error) throw new Error(error.message);
 
-  const { countByKey, userKeys } = await loadAssignedCrStats(supabaseAdmin, userName);
+  const countByKey = await loadCrCountsByScheduleKey(supabaseAdmin);
 
-  const visibleSchedules =
-    isAdmin || role === "PMO"
-      ? (schedules ?? [])
-      : (schedules ?? []).filter((s) =>
-          userKeys.has(scheduleKey(s.application, s.deployment_date)),
-        );
-
-  const planned = visibleSchedules.filter((s) => s.status === "Planned");
+  // Schedule visibility isn't ownership/application-scoped — same as
+  // listDeploymentSchedules, the dashboard summary must match what the
+  // schedules list actually shows: every schedule, to every PMO/ITPM/BA/Admin.
+  const planned = (schedules ?? []).filter((s) => s.status === "Planned");
   const todayIso = new Date().toISOString().slice(0, 10);
   const weekAheadIso = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
@@ -317,7 +356,7 @@ export const getDeploymentInfoByCr = createServerFn({ method: "GET" }).handler(a
 });
 
 export const getDeploymentScheduleCrs = createServerFn({ method: "GET" })
-  .inputValidator((data: { scheduleId: string }) => data)
+  .inputValidator(validated(z.object({ scheduleId: text })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("deployment");
     assertHasRoleOrAdmin(await requireSessionUser());
@@ -356,13 +395,16 @@ export const getDeploymentScheduleCrs = createServerFn({ method: "GET" })
 
 export const createDeploymentSchedule = createServerFn({ method: "POST" })
   .inputValidator(
-    (data: { application: string; deploymentDate: string; remarks?: string | null }) => data,
+    validated(z.object({ application: text, deploymentDate: text, remarks: optionalText })),
   )
   .handler(async ({ data }) => {
-    const { userName } = await assertDeploymentActor();
+    const { userName, role, spocApplications } = await assertPmoScheduleActor(
+      "create a deployment schedule",
+    );
     if (!data.deploymentDate) throw new Error("Deployment date is required");
     if (!data.application?.trim()) throw new Error("Application is required");
     const application = data.application.trim();
+    assertPmoApplicationScope(role, spocApplications, application);
     const remarks = data.remarks?.trim() || null;
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -410,15 +452,19 @@ export const createDeploymentSchedule = createServerFn({ method: "POST" })
 
 export const updateDeploymentSchedule = createServerFn({ method: "POST" })
   .inputValidator(
-    (data: {
-      id: string;
-      deploymentDate?: string;
-      remarks?: string | null;
-      status?: DeploymentStatus;
-    }) => data,
+    validated(
+      z.object({
+        id: text,
+        deploymentDate: optionalText,
+        remarks: optionalText,
+        status: optionalText,
+      }),
+    ),
   )
   .handler(async ({ data }) => {
-    const { userName } = await assertDeploymentActor();
+    const { userName, role, spocApplications } = await assertPmoScheduleActor(
+      "update a deployment schedule",
+    );
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: existing, error: fetchErr } = await supabaseAdmin
@@ -428,6 +474,7 @@ export const updateDeploymentSchedule = createServerFn({ method: "POST" })
       .maybeSingle();
     if (fetchErr) throw new Error(fetchErr.message);
     if (!existing) throw new Error("Deployment schedule not found");
+    assertPmoApplicationScope(role, spocApplications, existing.application);
     if (existing.status !== "Planned") {
       throw new Error(`Cannot edit a ${existing.status.toLowerCase()} deployment schedule`);
     }
@@ -479,9 +526,11 @@ export const updateDeploymentSchedule = createServerFn({ method: "POST" })
 // KPIs for every affected CR — the same follow-up crs.tsx's "Update
 // Status" action does after a workflow_status change.
 export const markDeploymentScheduleCompleted = createServerFn({ method: "POST" })
-  .inputValidator((data: { scheduleId: string }) => data)
+  .inputValidator(validated(z.object({ scheduleId: text })))
   .handler(async ({ data }) => {
-    const { userName } = await assertDeploymentActor();
+    const { userName, role, spocApplications } = await assertPmoScheduleActor(
+      "complete a deployment schedule",
+    );
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: schedule, error: schedErr } = await supabaseAdmin
@@ -491,6 +540,7 @@ export const markDeploymentScheduleCompleted = createServerFn({ method: "POST" }
       .maybeSingle();
     if (schedErr) throw new Error(schedErr.message);
     if (!schedule) throw new Error("Deployment schedule not found");
+    assertPmoApplicationScope(role, spocApplications, schedule.application);
     if (schedule.status !== "Planned") {
       throw new Error(`Cannot complete a ${schedule.status.toLowerCase()} deployment schedule`);
     }
@@ -540,10 +590,12 @@ export const markDeploymentScheduleCompleted = createServerFn({ method: "POST" }
 
 export const assignCrsToDeployment = createServerFn({ method: "POST" })
   .inputValidator(
-    (data: { crNumbers: string[]; scheduleId: string; remarks?: string | null }) => data,
+    validated(
+      z.object({ crNumbers: z.array(text).max(1000), scheduleId: text, remarks: optionalText }),
+    ),
   )
   .handler(async ({ data }) => {
-    const { userName, role } = await assertDeploymentActor();
+    const { userName, role, spocApplications } = await assertDeploymentActor();
     if (data.crNumbers.length === 0) throw new Error("Select at least one CR");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -555,6 +607,7 @@ export const assignCrsToDeployment = createServerFn({ method: "POST" })
       .maybeSingle();
     if (schedErr) throw new Error(schedErr.message);
     if (!schedule) throw new Error("Deployment schedule not found");
+    assertPmoApplicationScope(role, spocApplications, schedule.application);
     if (schedule.status !== "Planned") {
       throw new Error(`Cannot assign to a ${schedule.status.toLowerCase()} deployment schedule`);
     }
@@ -610,19 +663,28 @@ export const assignCrsToDeployment = createServerFn({ method: "POST" })
   });
 
 export const removeCrFromDeployment = createServerFn({ method: "POST" })
-  .inputValidator((data: { crNumber: string }) => data)
+  .inputValidator(validated(z.object({ crNumber: text })))
   .handler(async ({ data }) => {
-    const { userName } = await assertDeploymentActor();
+    const { userName, role, spocApplications } = await assertDeploymentActor();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: cr, error: fetchErr } = await supabaseAdmin
       .from("crs")
-      .select("cr_number, application, deployment_date")
+      .select("cr_number, application, ba, itpm, deployment_date")
       .eq("cr_number", data.crNumber)
       .maybeSingle();
     if (fetchErr) throw new Error(fetchErr.message);
     if (!cr) throw new Error("CR not found");
     if (!cr.deployment_date) throw new Error("This CR isn't assigned to a deployment");
+
+    // ITPM/BA may only remove CRs they're actually the BA/ITPM for — the
+    // same ownership rule assignCrsToDeployment enforces on the way in.
+    if (role === "ITPM" || role === "BA") {
+      if (cr.ba !== userName && cr.itpm !== userName) {
+        throw new Error(`Forbidden: you are not the BA/ITPM for ${cr.cr_number}`);
+      }
+    }
+    assertPmoApplicationScope(role, spocApplications, cr.application ?? "");
 
     const { data: schedule, error: schedErr } = await supabaseAdmin
       .from("deployment_schedule")
@@ -656,23 +718,34 @@ export const removeCrFromDeployment = createServerFn({ method: "POST" })
 // once the CR has reached the terminal "Deployed to Production" stage
 // (CMS-confirmed done) or hasn't reached UAT Signed Off yet (nothing to
 // progress). A CR currently AT "UAT Signed Off" is editable — that's the
-// starting point manual progression moves it forward from.
+// starting point manual progression moves it forward from. Ownership-scoped
+// same as assignCrsToDeployment/removeCrFromDeployment: PMO by
+// spoc_applications, ITPM/BA by being the CR's actual ba/itpm.
 export const updateDeploymentStage = createServerFn({ method: "POST" })
-  .inputValidator((data: { crNumber: string; stage: DeploymentStage }) => data)
+  .inputValidator(validated(z.object({ crNumber: text, stage: text })))
   .handler(async ({ data }) => {
-    const { userName } = await assertDeploymentActor();
-    if (!MANUAL_STAGES_SET.has(data.stage)) {
+    const { userName, role, spocApplications } = await assertDeploymentActor();
+    if (!MANUAL_STAGES_SET.has(data.stage as DeploymentStage)) {
       throw new Error("This stage is set automatically from CMS import and can't be set manually");
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: cr, error: fetchErr } = await supabaseAdmin
       .from("crs")
-      .select("cr_number, deployment_stage")
+      .select("cr_number, deployment_stage, application, ba, itpm")
       .eq("cr_number", data.crNumber)
       .maybeSingle();
     if (fetchErr) throw new Error(fetchErr.message);
     if (!cr) throw new Error("CR not found");
+
+    if (role === "ITPM" || role === "BA") {
+      if (cr.ba !== userName && cr.itpm !== userName) {
+        throw new Error(`Forbidden: you are not the BA/ITPM for ${cr.cr_number}`);
+      }
+    } else {
+      assertPmoApplicationScope(role, spocApplications, cr.application ?? "");
+    }
+
     if (!cr.deployment_stage || cr.deployment_stage === "Deployed to Production") {
       throw new Error(
         `Deployment stage cannot be edited while it is "${cr.deployment_stage ?? "not started"}"`,

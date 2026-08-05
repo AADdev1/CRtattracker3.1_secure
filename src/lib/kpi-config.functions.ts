@@ -3,22 +3,24 @@
 // are Admin-only. RLS is locked down, so these go through the service-role
 // client instead of the anon client.
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
 import { assertFeatureEnabled } from "@/lib/release-config";
+import { text, optionalText, validated } from "@/lib/validation";
 
-interface KpiFormInput {
-  id?: string;
-  name: string;
-  start_status_code: string;
-  end_status_code: string;
-  small_tat: number;
-  medium_tat: number;
-  large_tat: number;
-  warning_pct: number;
-  is_active: boolean;
-  excluded_status_codes: string[];
-  role: "ITPM" | "BA";
-}
+const kpiFormSchema = z.object({
+  id: optionalText,
+  name: text,
+  start_status_code: text,
+  end_status_code: text,
+  small_tat: z.number(),
+  medium_tat: z.number(),
+  large_tat: z.number(),
+  warning_pct: z.number(),
+  is_active: z.boolean(),
+  excluded_status_codes: z.array(text),
+  role: text,
+});
 
 export const listKpis = createServerFn({ method: "GET" }).handler(async () => {
   assertFeatureEnabled("administration");
@@ -41,7 +43,7 @@ export const listKpiExcludedStatuses = createServerFn({ method: "GET" }).handler
 });
 
 export const saveKpi = createServerFn({ method: "POST" })
-  .inputValidator((data: KpiFormInput) => data)
+  .inputValidator(validated(kpiFormSchema))
   .handler(async ({ data: form }) => {
     assertFeatureEnabled("administration");
     const { isAdmin } = await requireSessionUser();
@@ -53,12 +55,12 @@ export const saveKpi = createServerFn({ method: "POST" })
     const { excluded_status_codes, id, ...payload } = form;
     let kpiId = id;
     if (kpiId) {
-      const { error } = await supabaseAdmin.from("kpis").update(payload).eq("id", kpiId);
+      const { error } = await supabaseAdmin.from("kpis").update(payload as never).eq("id", kpiId);
       if (error) throw new Error(error.message);
     } else {
       const { data: created, error } = await supabaseAdmin
         .from("kpis")
-        .insert(payload)
+        .insert(payload as never)
         .select("id")
         .single();
       if (error) throw new Error(error.message);
@@ -81,7 +83,7 @@ export const saveKpi = createServerFn({ method: "POST" })
   });
 
 export const deleteKpi = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .inputValidator(validated(z.object({ id: text })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("administration");
     const { isAdmin } = await requireSessionUser();

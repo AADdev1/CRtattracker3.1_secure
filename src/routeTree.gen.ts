@@ -25,6 +25,7 @@ import { Route as CrSizesRouteImport } from './routes/cr-sizes'
 import { Route as CrPlannerRouteImport } from './routes/cr-planner'
 import { Route as CrAllocationRouteImport } from './routes/cr-allocation'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AccessMatrixRouteImport } from './routes/access-matrix'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TestCaseReviewCrNumberRouteImport } from './routes/test-case-review.$crNumber'
 import { Route as CrsCrNumberRouteImport } from './routes/crs.$crNumber'
@@ -109,6 +110,11 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccessMatrixRoute = AccessMatrixRouteImport.update({
+  id: '/access-matrix',
+  path: '/access-matrix',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -127,6 +133,7 @@ const CrsCrNumberRoute = CrsCrNumberRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/access-matrix': typeof AccessMatrixRoute
   '/auth': typeof AuthRoute
   '/cr-allocation': typeof CrAllocationRoute
   '/cr-planner': typeof CrPlannerRoute
@@ -148,6 +155,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/access-matrix': typeof AccessMatrixRoute
   '/auth': typeof AuthRoute
   '/cr-allocation': typeof CrAllocationRoute
   '/cr-planner': typeof CrPlannerRoute
@@ -170,6 +178,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/access-matrix': typeof AccessMatrixRoute
   '/auth': typeof AuthRoute
   '/cr-allocation': typeof CrAllocationRoute
   '/cr-planner': typeof CrPlannerRoute
@@ -193,6 +202,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/access-matrix'
     | '/auth'
     | '/cr-allocation'
     | '/cr-planner'
@@ -214,6 +224,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/access-matrix'
     | '/auth'
     | '/cr-allocation'
     | '/cr-planner'
@@ -235,6 +246,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/access-matrix'
     | '/auth'
     | '/cr-allocation'
     | '/cr-planner'
@@ -257,6 +269,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccessMatrixRoute: typeof AccessMatrixRoute
   AuthRoute: typeof AuthRoute
   CrAllocationRoute: typeof CrAllocationRoute
   CrPlannerRoute: typeof CrPlannerRoute
@@ -390,6 +403,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/access-matrix': {
+      id: '/access-matrix'
+      path: '/access-matrix'
+      fullPath: '/access-matrix'
+      preLoaderRoute: typeof AccessMatrixRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -426,6 +446,7 @@ const CrsRouteWithChildren = CrsRoute._addFileChildren(CrsRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccessMatrixRoute: AccessMatrixRoute,
   AuthRoute: AuthRoute,
   CrAllocationRoute: CrAllocationRoute,
   CrPlannerRoute: CrPlannerRoute,

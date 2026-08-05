@@ -5,7 +5,11 @@
 // Deployment Stage) — Admin is read-only here too, matching the app-wide
 // "Admin read-only everywhere" convention.
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
+// Aliased — this file has a local `text` variable (the trimmed update body)
+// inside addCrUpdate, which would otherwise shadow the schema import.
+import { text as textSchema, validated } from "@/lib/validation";
 
 // Deliberately does NOT include isAdmin — same reasoning as
 // crs-admin.functions.ts's assertCrEditAccess: CR data entry is a
@@ -21,7 +25,7 @@ async function assertCrUpdateWriteAccess() {
 // Full history for a CR, newest first — powers the CR Detail page's
 // Updates card.
 export const listUpdatesByCr = createServerFn({ method: "GET" })
-  .inputValidator((data: { crNumber: string }) => data)
+  .inputValidator(validated(z.object({ crNumber: textSchema })))
   .handler(async ({ data }) => {
     assertHasRoleOrAdmin(await requireSessionUser());
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -35,7 +39,7 @@ export const listUpdatesByCr = createServerFn({ method: "GET" })
   });
 
 export const addCrUpdate = createServerFn({ method: "POST" })
-  .inputValidator((data: { crNumber: string; updateText: string }) => data)
+  .inputValidator(validated(z.object({ crNumber: textSchema, updateText: textSchema })))
   .handler(async ({ data }) => {
     const { userName } = await assertCrUpdateWriteAccess();
     const text = data.updateText.trim();

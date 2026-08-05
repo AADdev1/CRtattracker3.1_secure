@@ -19,6 +19,7 @@ import {
   CalendarDays,
   PanelLeftClose,
   PanelLeftOpen,
+  KeyRound,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -114,6 +115,16 @@ const nav = [
     icon: ShieldCheck,
     requiresSecurityReportAccess: true,
     openInNewTab: true,
+    feature: "administration",
+  },
+  // Admin-only reference doc — same tier as Defect Status Mapping. The real
+  // gate is server-side in access-matrix.tsx's own canAccess check; this
+  // just keeps the link off the nav for everyone else.
+  {
+    to: "/access-matrix",
+    label: "Access Rights",
+    icon: KeyRound,
+    requiresAdminOnlyAccess: true,
     feature: "administration",
   },
 ] as const;

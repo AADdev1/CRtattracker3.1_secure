@@ -9,9 +9,18 @@
 // longer do any of this directly.
 import Papa from "papaparse";
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSessionUser } from "@/lib/gate.functions";
-import { assertFileSizeOk, assertRowCountOk } from "@/lib/upload-limits";
+import { assertFileSizeOk, assertPayloadSizeOk, assertRowCountOk } from "@/lib/upload-limits";
 import { syncDeploymentStagesForCrs } from "@/lib/deployment.functions";
+import { validated } from "@/lib/validation";
+
+// No per-cell 500-char cap here, unlike the blanket rule used elsewhere
+// (M4 remediation) — this is CMS-imported bulk data, and some legitimate
+// columns (title, remarks) can genuinely exceed 500 chars. Row count is
+// already capped server-side by assertRowCountOk below; this schema only
+// guards the *shape* (a flat array of string-keyed, string-valued rows).
+const csvRows = z.array(z.record(z.string(), z.string()));
 
 // Map from CSV header → DB column name.
 // Status columns are populated dynamically from workflow_statuses table.
@@ -97,13 +106,14 @@ export interface CsvImportResult {
 }
 
 const importCrRows = createServerFn({ method: "POST" })
-  .inputValidator((data: { rows: Record<string, string>[] }) => data)
+  .inputValidator(validated(z.object({ rows: csvRows })))
   .handler(async ({ data: { rows } }): Promise<CsvImportResult> => {
     const { isAdmin, role, userName } = await requireSessionUser();
     if (!isAdmin && role !== "PMO" && role !== "BA" && role !== "ITPM") {
       throw new Error("Forbidden: only Admin, PMO, BA, or ITPM can import CR data");
     }
     assertRowCountOk(rows.length);
+    assertPayloadSizeOk(rows);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: statuses, error: sErr } = await supabaseAdmin

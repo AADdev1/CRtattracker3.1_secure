@@ -1,19 +1,24 @@
 // Server-side scoping for CRs/KPI results/defects by BA/ITPM name match.
 // A CR is visible to the logged-in user when their user_management.user_name
-// exactly equals crs.ba and/or crs.itpm, OR when the CR's application is in
-// their user_management.spoc_applications (same SPOC broadening
-// test-cases.functions.ts already grants for approval rights — a PMO
-// covering an application without being personally listed as its BA/ITPM
-// gets full visibility into every CR under that application). Admins
-// (user_management.is_admin) bypass this entirely and see every CR/KPI/
-// defect unfiltered.
+// exactly equals crs.ba and/or crs.itpm, OR — PMO only — when the CR's
+// application is in their user_management.spoc_applications (a PMO covering
+// an application without being personally listed as its BA/ITPM gets full
+// visibility into every CR under that application). ITPM/BA do NOT get this
+// SPOC broadening here: their visibility on Dashboard/CR Repository/CR
+// Detail/KPI Worklist is strictly "CRs where I'm actually named as ba/itpm."
+// (SPOC still means something for ITPM/BA elsewhere — CR Allocation's
+// claimCr requires it — just not as a visibility broadener in this file.)
+// Admins (user_management.is_admin) bypass this entirely and see every
+// CR/KPI/defect unfiltered.
 //
 // Uses the service-role client (RLS is locked down on these tables — see
 // supabase/migrations/20260703000000_lock_down_rls.sql), loaded dynamically
 // inside each handler so client.server.ts never gets pulled into the client
 // bundle (this file is reachable from route components).
 import { createServerFn } from "@tanstack/react-start";
-import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
+import { z } from "zod";
+import { requireSessionUser, assertHasRoleOrAdmin, type StaffRole } from "@/lib/gate.functions";
+import { optionalText } from "@/lib/validation";
 import type { Database } from "@/integrations/supabase/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -21,21 +26,28 @@ export type CrRelation = "ba" | "itpm" | "both" | "admin";
 
 type CrRow = Database["public"]["Tables"]["crs"]["Row"];
 
-interface ScopedInput {
-  crNumber?: string;
+const scopedInputSchema = z.object({ crNumber: optionalText });
+function validateScopedInput(data: unknown) {
+  return scopedInputSchema.parse(data ?? {});
 }
 
 // A SPOC match grants "both" — the same full-visibility relation a
 // BA+ITPM-on-the-same-CR gets — since a SPOC's role in that application
-// isn't specifically BA or ITPM, it's oversight of everything.
+// isn't specifically BA or ITPM, it's oversight of everything. Restricted to
+// non-ITPM/BA callers (i.e. PMO) — see file header.
 function relationFor(
   row: { ba: string | null; itpm: string | null; application: string | null },
   userName: string,
   spocApplications: string[],
+  role: StaffRole | null,
 ): CrRelation | null {
   const isBa = row.ba === userName;
   const isItpm = row.itpm === userName;
-  const isSpoc = !!row.application && spocApplications.includes(row.application);
+  const isSpoc =
+    role !== "ITPM" &&
+    role !== "BA" &&
+    !!row.application &&
+    spocApplications.includes(row.application);
   if ((isBa && isItpm) || isSpoc) return "both";
   if (isBa) return "ba";
   if (isItpm) return "itpm";
@@ -47,7 +59,8 @@ async function loadScopedCrs(
   userName: string,
   isAdmin: boolean,
   spocApplications: string[],
-  crNumber?: string,
+  role: StaffRole | null,
+  crNumber?: string | null,
 ) {
   const columns = crNumber
     ? "*"
@@ -61,13 +74,13 @@ async function loadScopedCrs(
       row: row as unknown as CrRow,
       relation: isAdmin
         ? ("admin" as const)
-        : relationFor(row as unknown as CrRow, userName, spocApplications),
+        : relationFor(row as unknown as CrRow, userName, spocApplications, role),
     }))
     .filter((x): x is { row: CrRow; relation: CrRelation } => x.relation !== null);
 }
 
 export const getScopedCrs = createServerFn({ method: "GET" })
-  .inputValidator((data: ScopedInput | undefined) => data ?? {})
+  .inputValidator(validateScopedInput)
   .handler(async ({ data }) => {
     const session = await requireSessionUser();
     assertHasRoleOrAdmin(session);
@@ -84,6 +97,7 @@ export const getScopedCrs = createServerFn({ method: "GET" })
       userName,
       seesAllCrs,
       spocApplications,
+      role,
       data.crNumber,
     );
     if (data.crNumber) {
@@ -102,17 +116,18 @@ function roleAllowedForRelation(role: string | undefined, relation: CrRelation):
 }
 
 export const getScopedKpiResults = createServerFn({ method: "GET" })
-  .inputValidator((data: ScopedInput | undefined) => data ?? {})
+  .inputValidator(validateScopedInput)
   .handler(async ({ data }) => {
     const session = await requireSessionUser();
     assertHasRoleOrAdmin(session);
-    const { userName, isAdmin, spocApplications } = session;
+    const { userName, isAdmin, role, spocApplications } = session;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const scoped = await loadScopedCrs(
       supabaseAdmin,
       userName,
       isAdmin,
       spocApplications,
+      role,
       data.crNumber,
     );
     if (scoped.length === 0) return [];
@@ -143,17 +158,18 @@ export const getScopedKpiResults = createServerFn({ method: "GET" })
   });
 
 export const getScopedDefects = createServerFn({ method: "GET" })
-  .inputValidator((data: ScopedInput | undefined) => data ?? {})
+  .inputValidator(validateScopedInput)
   .handler(async ({ data }) => {
     const session = await requireSessionUser();
     assertHasRoleOrAdmin(session);
-    const { userName, isAdmin, spocApplications } = session;
+    const { userName, isAdmin, role, spocApplications } = session;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const scoped = await loadScopedCrs(
       supabaseAdmin,
       userName,
       isAdmin,
       spocApplications,
+      role,
       data.crNumber,
     );
     // Admins see every defect, not just open ones; everyone else only sees

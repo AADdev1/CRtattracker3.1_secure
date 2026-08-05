@@ -2,8 +2,10 @@
 // writes are Admin-only. RLS is locked down, so these go through the
 // service-role client now instead of the anon client.
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
 import { assertFeatureEnabled } from "@/lib/release-config";
+import { text, validated } from "@/lib/validation";
 
 async function assertAdmin() {
   assertFeatureEnabled("administration");
@@ -34,7 +36,7 @@ export const listUnmappedDefectStatuses = createServerFn({ method: "GET" }).hand
 });
 
 export const toggleDefectStatusOpen = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string; is_open: boolean }) => data)
+  .inputValidator(validated(z.object({ id: text, is_open: z.boolean() })))
   .handler(async ({ data }) => {
     await assertAdmin();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -47,7 +49,7 @@ export const toggleDefectStatusOpen = createServerFn({ method: "POST" })
   });
 
 export const addDefectStatus = createServerFn({ method: "POST" })
-  .inputValidator((data: { status: string }) => data)
+  .inputValidator(validated(z.object({ status: text })))
   .handler(async ({ data }) => {
     await assertAdmin();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -59,7 +61,7 @@ export const addDefectStatus = createServerFn({ method: "POST" })
   });
 
 export const removeDefectStatus = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .inputValidator(validated(z.object({ id: text })))
   .handler(async ({ data }) => {
     await assertAdmin();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

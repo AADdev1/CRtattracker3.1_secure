@@ -6,6 +6,7 @@
 // =============================================================================
 import { createServerFn } from "@tanstack/react-start";
 import { requireSessionUser, assertHasRoleOrAdmin } from "@/lib/gate.functions";
+import { text, validated } from "@/lib/validation";
 
 export type CrSize = "Small" | "Medium" | "Large";
 export type KpiStatusValue = "pending" | "not_started" | "green" | "amber" | "red";
@@ -211,11 +212,38 @@ function round2(n: number): number {
 }
 
 const LOCK_STALE_MS = 5 * 60 * 1000;
+// recalculateAllKpis is callable by any role holder (assertHasRoleOrAdmin,
+// no admin-only gate) and does a full-table read/write pass over
+// crs/kpis/kpi_results — the mutex below only stops two runs from
+// *overlapping*, not one caller (or several) firing it repeatedly
+// back-to-back. This cooldown is the rate limit for that (see M2 in the
+// TAGIC compliance report): reuses the existing singleton lock row's
+// started_at instead of a separate rate-limit table.
+const RECALC_COOLDOWN_MS = 2 * 60 * 1000;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function acquireKpiEngineLock(supabaseAdmin: any): Promise<void> {
-  const nowIso = new Date().toISOString();
-  const staleCutoff = new Date(Date.now() - LOCK_STALE_MS).toISOString();
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const staleCutoff = new Date(now - LOCK_STALE_MS).toISOString();
+
+  const { data: lockRow, error: readErr } = await supabaseAdmin
+    .from("kpi_engine_lock")
+    .select("is_running, started_at")
+    .eq("id", "singleton")
+    .maybeSingle();
+  if (readErr) throw new Error(readErr.message);
+
+  if (lockRow && !lockRow.is_running && lockRow.started_at) {
+    const elapsedMs = now - new Date(lockRow.started_at).getTime();
+    if (elapsedMs < RECALC_COOLDOWN_MS) {
+      const waitSec = Math.ceil((RECALC_COOLDOWN_MS - elapsedMs) / 1000);
+      throw new Error(
+        `KPI recalculation was run recently — please wait ${waitSec}s before running it again.`,
+      );
+    }
+  }
+
   const { data: claimed, error } = await supabaseAdmin
     .from("kpi_engine_lock")
     .update({ is_running: true, started_at: nowIso, updated_at: nowIso })
@@ -328,7 +356,7 @@ export const recalculateAllKpis = createServerFn({ method: "POST" }).handler(
  * Recalculate KPIs for a single CR (used after editing CR size or notes).
  */
 export const recalculateForCr = createServerFn({ method: "POST" })
-  .inputValidator((crNumber: string) => crNumber)
+  .inputValidator(validated(text))
   .handler(async ({ data: crNumber }): Promise<void> => {
     assertHasRoleOrAdmin(await requireSessionUser());
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

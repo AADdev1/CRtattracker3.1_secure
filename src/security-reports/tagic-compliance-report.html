@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CR Tracker — TAGIC-IR-GL-001 Compliance &amp; VAPT Report</title>
+<style>
+  :root{
+    --paper:#eef1f0; --paper-raised:#ffffff; --ink:#161a1e; --muted:#5c6570; --line:#d8dee0;
+    --accent:#2f5d5a; --accent-soft:#e2ebe9; --accent-ink:#20403e;
+    --sev-critical:#b3261e; --sev-critical-bg:#fbeae8;
+    --sev-high:#a15208; --sev-high-bg:#faeee1;
+    --sev-medium:#8a6a08; --sev-medium-bg:#f8f0dc;
+    --sev-low:#2f5c78; --sev-low-bg:#e6eef3;
+    --sev-info:#5c6570; --sev-info-bg:#eceef0;
+    --sev-secure:#256b45; --sev-secure-bg:#e5f1e9;
+    --code-bg:#e5e9e8; --code-ink:#1c2624;
+    --shadow: 0 1px 2px rgba(20,23,28,.06), 0 10px 28px -14px rgba(20,23,28,.16);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#12161a; --paper-raised:#1a2024; --ink:#e7ebe9; --muted:#98a2a1; --line:#2a3236;
+      --accent:#7fb3ac; --accent-soft:#1c2c2a; --accent-ink:#a9d0ca;
+      --sev-critical:#ff8a80; --sev-critical-bg:#3a1f1f;
+      --sev-high:#ffb677; --sev-high-bg:#3a2a17;
+      --sev-medium:#f0d271; --sev-medium-bg:#362f16;
+      --sev-low:#8ec2e6; --sev-low-bg:#182a35;
+      --sev-info:#a3adac; --sev-info-bg:#212a2c;
+      --sev-secure:#8fdcae; --sev-secure-bg:#173226;
+      --code-bg:#0f1513; --code-ink:#d7e2df;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 14px 34px -16px rgba(0,0,0,.65);
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+    font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--accent-soft); }
+  a{ color:var(--accent); }
+  a:focus-visible, button:focus-visible, summary:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  h1,h2,h3,h4{
+    font-family:Georgia,"Iowan Old Style","Palatino Linotype","URW Palladio L",serif;
+    font-weight:600; text-wrap:balance; color:var(--ink); margin:0 0 .4em;
+  }
+  code,.mono,.field-val time,.stat b,.tag{ font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace; }
+  .wrap{ max-width:980px; margin:0 auto; padding:0 24px 100px; }
+
+  .cover{ padding:56px 0 32px; border-bottom:1px solid var(--line); margin-bottom:36px; }
+  .eyebrow{
+    font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace;
+    font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent);
+    display:flex; align-items:center; gap:10px; margin-bottom:16px;
+  }
+  .eyebrow .dot{ width:7px; height:7px; border-radius:50%; background:var(--accent); display:inline-block; }
+  .cover h1{ font-size:2.35rem; line-height:1.14; max-width:26ch; }
+  .cover .sub{ color:var(--muted); font-size:1.02rem; max-width:66ch; margin-top:12px; }
+
+  table.doc-control{ width:100%; border-collapse:collapse; margin-top:28px; font-size:13.5px; background:var(--paper-raised); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  table.doc-control td{ padding:9px 14px; border-bottom:1px solid var(--line); vertical-align:top; }
+  table.doc-control tr:last-child td{ border-bottom:none; }
+  table.doc-control td.k{ color:var(--muted); width:200px; text-transform:uppercase; font-size:11px; letter-spacing:.06em; }
+
+  .stats{ display:grid; grid-template-columns:repeat(5,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:28px 0 8px; }
+  .stat{ background:var(--paper-raised); padding:16px 14px; text-align:left; }
+  .stat b{ display:block; font-size:1.6rem; font-weight:600; font-variant-numeric:tabular-nums; }
+  .stat span{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .stat.compliant b{ color:var(--sev-secure); }
+  .stat.high b{ color:var(--sev-high); }
+  .stat.medium b{ color:var(--sev-medium); }
+  .stat.low b{ color:var(--sev-low); }
+  .stat.na b{ color:var(--muted); }
+
+  section{ margin-top:52px; }
+  section > h2{ font-size:1.42rem; padding-bottom:11px; border-bottom:1px solid var(--line); margin-bottom:20px; display:flex; align-items:baseline; gap:10px; }
+  section > h2 .count{ font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace; font-size:.78rem; color:var(--muted); font-weight:400; }
+  section > p.lede{ color:var(--muted); max-width:72ch; margin:-8px 0 22px; }
+
+  .toc{ display:flex; flex-wrap:wrap; gap:8px 10px; margin:26px 0 0; padding:15px 18px; background:var(--paper-raised); border:1px solid var(--line); border-radius:10px; }
+  .toc a{ font-size:12.5px; text-decoration:none; color:var(--ink); padding:4px 10px; border:1px solid var(--line); border-radius:100px; white-space:nowrap; }
+  .toc a:hover{ border-color:var(--accent); color:var(--accent); }
+
+  table.index{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  table.index th{ text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding:8px 10px; border-bottom:1px solid var(--line); }
+  table.index td{ padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  table.index tr:last-child td{ border-bottom:none; }
+  table.index a{ text-decoration:none; color:var(--ink); font-weight:600; }
+  table.index a:hover{ color:var(--accent); }
+  table.index td.center{ text-align:center; }
+
+  .chip{ display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:3px 9px; border-radius:100px; font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace; white-space:nowrap; }
+  .chip.critical{ background:var(--sev-critical-bg); color:var(--sev-critical); }
+  .chip.high{ background:var(--sev-high-bg); color:var(--sev-high); }
+  .chip.medium{ background:var(--sev-medium-bg); color:var(--sev-medium); }
+  .chip.low{ background:var(--sev-low-bg); color:var(--sev-low); }
+  .chip.info{ background:var(--sev-info-bg); color:var(--sev-info); }
+  .chip.secure{ background:var(--sev-secure-bg); color:var(--sev-secure); }
+  .chip.resolved{ background:var(--sev-secure-bg); color:var(--sev-secure); }
+  .chip.accepted{ background:var(--sev-low-bg); color:var(--sev-low); }
+  .chip.progress{ background:var(--sev-medium-bg); color:var(--sev-medium); }
+  .chip-row{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+
+  .finding{ background:var(--paper-raised); border:1px solid var(--line); border-left-width:4px; border-radius:8px; padding:20px 22px; margin-bottom:16px; box-shadow:var(--shadow); scroll-margin-top:20px; }
+  .finding[data-sev="critical"]{ border-left-color:var(--sev-critical); }
+  .finding[data-sev="high"]{ border-left-color:var(--sev-high); }
+  .finding[data-sev="medium"]{ border-left-color:var(--sev-medium); }
+  .finding[data-sev="low"]{ border-left-color:var(--sev-low); }
+  .finding[data-sev="info"]{ border-left-color:var(--sev-info); }
+  .finding[data-status="resolved"]{ border-left-color:var(--sev-secure); }
+  .finding[data-status="accepted"]{ border-left-color:var(--sev-low); }
+  .finding[data-status="progress"]{ border-left-color:var(--sev-medium); }
+
+  .finding-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:6px; }
+  .finding-head h3{ font-size:1.08rem; margin:0; }
+  .finding-id{ color:var(--muted); font-size:.8em; font-weight:400; }
+  .loc{ font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace; font-size:12px; color:var(--muted); margin:6px 0 14px; word-break:break-all; }
+  .loc b{ color:var(--ink); font-weight:600; }
+  .guideline-ref{ display:inline-block; font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace; font-size:11px; background:var(--accent-soft); color:var(--accent-ink); padding:2px 8px; border-radius:5px; margin-bottom:10px; }
+
+  .status-note{ background:var(--sev-low-bg); border:1px solid color-mix(in srgb, var(--sev-low) 30%, transparent); border-radius:7px; padding:10px 13px; margin:12px 0 4px; font-size:13px; }
+  .status-note b{ color:var(--sev-low); }
+  .status-note.resolved{ background:var(--sev-secure-bg); border-color:color-mix(in srgb, var(--sev-secure) 30%, transparent); }
+  .status-note.resolved b{ color:var(--sev-secure); }
+  .status-note.accepted{ background:var(--sev-low-bg); border-color:color-mix(in srgb, var(--sev-low) 30%, transparent); }
+  .status-note.accepted b{ color:var(--sev-low); }
+
+  .resolution{ background:var(--sev-secure-bg); border:1px solid color-mix(in srgb, var(--sev-secure) 30%, transparent); border-radius:7px; padding:12px 14px; margin:14px 0 4px; }
+  .resolution.accepted{ background:var(--sev-low-bg); border-color:color-mix(in srgb, var(--sev-low) 30%, transparent); }
+  .resolution.progress{ background:var(--sev-medium-bg); border-color:color-mix(in srgb, var(--sev-medium) 30%, transparent); }
+  .resolution .k{ font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:700; color:var(--sev-secure); margin-bottom:4px; }
+  .resolution.accepted .k{ color:var(--sev-low); }
+  .resolution.progress .k{ color:var(--sev-medium); }
+  .resolution p{ margin:0 0 6px; font-size:14px; }
+  .resolution p:last-child{ margin-bottom:0; }
+  .resolution ul{ margin:6px 0 0; padding-left:18px; font-size:14px; }
+
+  details.original{ margin-top:14px; }
+  details.original > summary{ cursor:pointer; font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+  details.original > summary:hover{ color:var(--accent); }
+  details.original .field:first-of-type{ margin-top:14px; }
+
+  .field{ margin-top:12px; }
+  .field .k{ font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin-bottom:4px; font-weight:700; }
+  .field .v{ font-size:14px; }
+  .field .v p{ margin:0 0 8px; }
+  .field .v p:last-child{ margin-bottom:0; }
+
+  pre{ background:var(--code-bg); color:var(--code-ink); padding:12px 14px; border-radius:7px; overflow-x:auto; font-size:12px; line-height:1.55; margin:6px 0 0; border:1px solid var(--line); }
+  pre code{ background:none; padding:0; font-size:inherit; }
+  p code, li code, td code{ background:var(--code-bg); padding:1px 6px; border-radius:4px; font-size:.86em; }
+
+  .compact-row{ display:grid; grid-template-columns:70px 1fr 110px; gap:12px; padding:11px 0; border-bottom:1px solid var(--line); font-size:13.5px; align-items:start; }
+  .compact-row:last-child{ border-bottom:none; }
+  .compact-row .id{ color:var(--muted); font-size:12px; }
+  .compact-row .desc{ color:var(--ink); }
+  .compact-row .desc .loc{ margin:2px 0 0; }
+
+  .matrix-group{ margin-bottom:26px; }
+  .matrix-group h4{ font-size:.95rem; margin:0 0 10px; color:var(--accent-ink); font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace; text-transform:uppercase; letter-spacing:.04em; font-weight:700; }
+
+  .roadmap{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+  .roadmap li{ display:grid; grid-template-columns:28px 1fr; gap:12px; padding:12px 14px; background:var(--paper-raised); border:1px solid var(--line); border-radius:8px; font-size:13.5px; }
+  .roadmap li .n{ font-family:ui-monospace,monospace; color:var(--accent); font-weight:700; }
+
+  .secure-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:720px){
+    .secure-grid{ grid-template-columns:1fr; }
+    .stats{ grid-template-columns:repeat(2,1fr); }
+    .compact-row{ grid-template-columns:1fr; gap:4px; }
+  }
+
+  footer{ margin-top:64px; padding-top:22px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; line-height:1.7; }
+
+  /* --- interactive layer --- */
+  .sev-bars{ display:flex; flex-direction:column; gap:8px; margin:22px 0 4px; }
+  .sev-bar{
+    display:grid; grid-template-columns:76px 1fr 28px; gap:12px; align-items:center;
+    background:none; border:1px solid transparent; border-radius:6px; padding:3px 6px; margin:0 -6px;
+    cursor:pointer; font-family:inherit; text-align:left; width:calc(100% + 12px);
+  }
+  .sev-bar:hover{ background:var(--accent-soft); }
+  .sev-bar[aria-pressed="true"]{ border-color:var(--accent); background:var(--accent-soft); }
+  .sev-bar .label{ font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  .sev-bar[aria-pressed="true"] .label{ color:var(--ink); font-weight:700; }
+  .sev-bar .track{ height:9px; border-radius:5px; background:var(--line); overflow:hidden; }
+  .sev-bar .fill{ height:100%; border-radius:5px; }
+  .sev-bar .count{ font-variant-numeric:tabular-nums; font-size:12.5px; color:var(--muted); text-align:right; }
+  .sev-hint{ font-size:11.5px; color:var(--muted); margin:6px 0 0; }
+
+  .progress-line{ display:flex; align-items:center; gap:12px; margin:20px 0 0; font-size:12.5px; color:var(--muted); }
+  .progress-line .track{ flex:1; height:6px; border-radius:4px; background:var(--line); overflow:hidden; }
+  .progress-line .fill{ height:100%; width:0%; background:var(--sev-secure); border-radius:4px; transition:width .3s ease; }
+  .progress-line b{ color:var(--ink); font-variant-numeric:tabular-nums; }
+
+  .toolbar{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:24px 0 0; }
+  .toolbar input[type="search"]{
+    flex:1; min-width:220px; padding:9px 13px; border-radius:8px; border:1px solid var(--line);
+    background:var(--paper-raised); color:var(--ink); font-size:13.5px; font-family:inherit;
+  }
+  .toolbar input[type="search"]::placeholder{ color:var(--muted); }
+  .toolbar input[type="search"]:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
+  button.clear-filter{
+    font-size:12px; color:var(--muted); background:none; border:1px solid var(--line); border-radius:100px;
+    padding:6px 14px; cursor:pointer; font-family:inherit; white-space:nowrap;
+  }
+  button.clear-filter:hover{ border-color:var(--accent); color:var(--accent); }
+  button.clear-filter[hidden]{ display:none; }
+
+  .finding-toggle{
+    background:none; border:none; padding:0; margin:0; cursor:pointer; color:inherit; font:inherit;
+    display:flex; align-items:flex-start; gap:8px; text-align:left; min-width:0;
+  }
+  .finding-toggle:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:4px; }
+  .finding-toggle .chevron{ flex-shrink:0; width:15px; height:15px; margin-top:3px; transition:transform .18s ease; color:var(--muted); }
+  .finding[data-collapsed="true"] .chevron{ transform:rotate(-90deg); }
+  .finding[data-collapsed="true"] .finding-body{ display:none; }
+  .finding[data-hidden="true"], .compact-row[data-hidden="true"]{ display:none !important; }
+  section[data-hidden="true"]{ display:none !important; }
+
+  .status-group{ display:inline-flex; gap:2px; background:var(--paper); border:1px solid var(--line); border-radius:100px; padding:2px; flex-shrink:0; }
+  .status-group button{
+    border:none; background:none; font-family:inherit; font-size:10px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.03em; padding:4px 9px; border-radius:100px; cursor:pointer; color:var(--muted); white-space:nowrap;
+  }
+  .status-group button:hover{ color:var(--ink); }
+  .status-group button[aria-pressed="true"][data-status="open"]{ background:var(--sev-info-bg); color:var(--sev-info); }
+  .status-group button[aria-pressed="true"][data-status="progress"]{ background:var(--sev-medium-bg); color:var(--sev-medium); }
+  .status-group button[aria-pressed="true"][data-status="resolved"]{ background:var(--sev-secure-bg); color:var(--sev-secure); }
+  .compact-row .status-group{ margin-top:2px; }
+
+  .no-results{ display:none; padding:28px; text-align:center; color:var(--muted); font-size:13.5px; border:1px dashed var(--line); border-radius:8px; margin-top:16px; }
+  .no-results[data-visible="true"]{ display:block; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="cover">
+    <div class="eyebrow"><span class="dot"></span> Confidential — Compliance &amp; Application Security Assessment</div>
+    <h1>CR Tracker (Kpisavvy)<br>Compliance &amp; VAPT Report</h1>
+    <p class="sub">Full white-box compliance assessment of the application source and Supabase/Postgres schema against <b>TAGIC-IR-GL-001 — Application API and Secure Coding Guidelines v1.5</b> (TATA AIG General Insurance Company Limited, released 21-Jan-2021). Every clause in Sections 3–5 of the guideline was checked against the current codebase.</p>
+
+    <table class="doc-control">
+      <tr><td class="k">Reference standard</td><td>TAGIC-IR-GL-001 v1.5 — Application API and Secure Coding Guidelines</td></tr>
+      <tr><td class="k">Target system</td><td>CR Tracker / Kpisavvy — TanStack Start (React 19) + Supabase (Postgres/Auth)</td></tr>
+      <tr><td class="k">Assessment method</td><td>Static, white-box source review (four parallel workstreams) — no dynamic penetration test performed</td></tr>
+      <tr><td class="k">Assessment date</td><td>2026-08-04</td></tr>
+      <tr><td class="k">Scope</td><td>Full repository working tree — application code, server functions, all 25 Supabase migrations</td></tr>
+      <tr><td class="k">Prior internal review referenced</td><td><code>src/security-reports/vapt-report.html</code> — dated 2026-07-10, updated 2026-07-19</td></tr>
+    </table>
+  </div>
+
+  <section id="summary">
+    <h2>Executive Summary</h2>
+    <p class="lede">This assessment evaluated roughly 100 discrete controls drawn from Sections 3.1–3.13 (Hardening Parameters), Section 4 (API Security Best Practices), and Section 5 (Web Service Best Practices) of the guideline. The codebase carries forward a materially strong security baseline — RLS is locked to <code>service_role</code> only, authorization is centralized through a single server-side gate, no SQL-injection or exploitable XSS surface was found, and CSP/HSTS/frame headers are already applied on every response. The team's own internal VAPT pass (July 2026) had already closed 13 of 19 prior findings. This assessment found <b>28 net-new or still-open gaps against the TATA AIG guideline specifically</b> — most are policy/hardening items (session timeout duration, MFA, audit logging, CI/CD) rather than exploitable bugs. One genuine new access-control defect was identified (H1).</p>
+
+    <div class="stats">
+      <div class="stat compliant"><b>~72</b><span>Controls compliant</span></div>
+      <div class="stat high"><b>3</b><span>High findings</span></div>
+      <div class="stat medium"><b>11</b><span>Medium findings</span></div>
+      <div class="stat low"><b>10</b><span>Low findings</span></div>
+      <div class="stat na"><b>4</b><span>Info / not applicable</span></div>
+    </div>
+
+    <div class="sev-bars" role="group" aria-label="Filter findings by severity">
+      <button type="button" class="sev-bar" data-filter-sev="high" aria-pressed="false">
+        <span class="label">High</span>
+        <span class="track"><span class="fill" style="width:27%; background:var(--sev-high);"></span></span>
+        <span class="count">3</span>
+      </button>
+      <button type="button" class="sev-bar" data-filter-sev="medium" aria-pressed="false">
+        <span class="label">Medium</span>
+        <span class="track"><span class="fill" style="width:100%; background:var(--sev-medium);"></span></span>
+        <span class="count">11</span>
+      </button>
+      <button type="button" class="sev-bar" data-filter-sev="low" aria-pressed="false">
+        <span class="label">Low</span>
+        <span class="track"><span class="fill" style="width:91%; background:var(--sev-low);"></span></span>
+        <span class="count">10</span>
+      </button>
+      <button type="button" class="sev-bar" data-filter-sev="info" aria-pressed="false">
+        <span class="label">Info</span>
+        <span class="track"><span class="fill" style="width:36%; background:var(--sev-info);"></span></span>
+        <span class="count">4</span>
+      </button>
+    </div>
+    <p class="sev-hint">Click a bar to filter the findings below to that severity — click again to clear.</p>
+
+    <div class="progress-line">
+      <span id="progress-label"><b>0</b> of <b>28</b> findings marked resolved</span>
+      <span class="track"><span class="fill" id="progress-fill"></span></span>
+    </div>
+    <p class="sev-hint">Remediation status is tracked per finding below and saved in this browser only — it isn't shared with other reviewers or written back to the report.</p>
+
+    <div class="toolbar">
+      <input type="search" id="finding-search" placeholder="Search findings by title, file, or keyword…" aria-label="Search findings" />
+      <button type="button" class="clear-filter" id="clear-filter" hidden>Clear filter</button>
+    </div>
+  </section>
+
+  <nav class="toc" aria-label="Section navigation">
+    <a href="#matrix">Compliance matrix</a>
+    <a href="#high-findings">High findings</a>
+    <a href="#medium-findings">Medium findings</a>
+    <a href="#low-findings">Low / Info findings</a>
+    <a href="#accepted">Previously accepted risk</a>
+    <a href="#secure">Verified compliant areas</a>
+    <a href="#roadmap">Remediation roadmap</a>
+    <a href="#appendix">Appendix</a>
+  </nav>
+
+  <div class="no-results" id="no-results">
+    <p style="margin:0 0 10px;">No findings match the current filter/search.</p>
+    <button type="button" class="clear-filter" id="clear-filter-2">Clear filter</button>
+  </div>
+
+  <section id="matrix">
+    <h2>Compliance Matrix <span class="count">by TAGIC-IR-GL-001 section</span></h2>
+    <p class="lede">Status per guideline clause group. "Partial" means most bullets in that clause are met but at least one open finding remains against it — see the linked finding IDs.</p>
+
+    <div class="matrix-group">
+      <h4>§3 Hardening Parameters</h4>
+      <table class="index">
+        <tr><th>§</th><th>Clause</th><th>Status</th><th>Related findings</th></tr>
+        <tr><td class="mono">3.1</td><td>Input Validation</td><td><span class="chip medium">Partial</span></td><td><a href="#h1">H1</a>, <a href="#m4">M4</a>, <a href="#l5">L5</a>, <a href="#l6">L6</a></td></tr>
+        <tr><td class="mono">3.2</td><td>Output Encoding</td><td><span class="chip secure">Compliant</span></td><td>—</td></tr>
+        <tr><td class="mono">3.3</td><td>Authentication &amp; Password Management</td><td><span class="chip medium">Partial</span></td><td><a href="#h3">H3</a>, <a href="#m8">M8</a>, <a href="#m9">M9</a>, <a href="#l2">L2</a>, <a href="#l3">L3</a>, <a href="#l11">L11</a></td></tr>
+        <tr><td class="mono">3.4</td><td>Session Management</td><td><span class="chip medium">Partial</span></td><td><a href="#h2">H2</a>, <a href="#m9">M9</a>, <a href="#m10">M10</a></td></tr>
+        <tr><td class="mono">3.5</td><td>Access Control</td><td><span class="chip medium">Partial</span></td><td><a href="#h1">H1</a>, <a href="#m1">M1</a>, <a href="#m2">M2</a>, <a href="#m11">M11</a>, <a href="#l7">L7</a></td></tr>
+        <tr><td class="mono">3.6</td><td>Miscellaneous (15-min idle timeout, lockout, CAPTCHA, forced change)</td><td><span class="chip high">Partial</span></td><td><a href="#h2">H2</a>, <a href="#m8">M8</a>, <a href="#l1">L1</a></td></tr>
+        <tr><td class="mono">3.7</td><td>Error Handling &amp; Logging</td><td><span class="chip medium">Partial</span></td><td><a href="#m3">M3</a></td></tr>
+        <tr><td class="mono">3.8</td><td>Data Protection</td><td><span class="chip medium">Partial</span></td><td><a href="#m6">M6</a>, <a href="#l10">L10</a></td></tr>
+        <tr><td class="mono">3.9</td><td>Communication Security</td><td><span class="chip secure">Compliant</span></td><td>—</td></tr>
+        <tr><td class="mono">3.10</td><td>System Configuration</td><td><span class="chip medium">Partial</span></td><td><a href="#m7">M7</a>, <a href="#l8">L8</a>, <a href="#l12">L12</a>, <a href="#l14">L14</a></td></tr>
+        <tr><td class="mono">3.11</td><td>Database Security</td><td><span class="chip secure">Compliant</span></td><td>(H1 is a mass-assignment/app-logic gap, not an RLS/DB-privilege gap)</td></tr>
+        <tr><td class="mono">3.12</td><td>File Management</td><td><span class="chip medium">Partial</span></td><td><a href="#m5">M5</a>, <a href="#l4">L4</a>, <a href="#l13">L13</a></td></tr>
+        <tr><td class="mono">3.13</td><td>Memory Management</td><td><span class="chip info">N/A</span></td><td>Managed JS/V8 runtime — no native buffer/memory surface. No <code>eval</code>/<code>new Function</code> found.</td></tr>
+      </table>
+    </div>
+
+    <div class="matrix-group">
+      <h4>§4 API Security Best Practices</h4>
+      <table class="index">
+        <tr><th>§</th><th>Clause</th><th>Status</th><th>Related findings</th></tr>
+        <tr><td class="mono">4.1</td><td>Authentication</td><td><span class="chip medium">Partial</span></td><td><a href="#h3">H3</a>, <a href="#m2">M2</a></td></tr>
+        <tr><td class="mono">4.2</td><td>JWT</td><td><span class="chip secure">Compliant</span></td><td>Algorithm verified server-side via <code>getClaims()</code>; TTL/secret strength is Supabase-managed — <a href="#l11">L11</a></td></tr>
+        <tr><td class="mono">4.3</td><td>OAuth</td><td><span class="chip info">N/A</span></td><td>No OAuth/social-login flow implemented</td></tr>
+        <tr><td class="mono">4.4</td><td>Access (throttling, HTTPS, HSTS)</td><td><span class="chip medium">Partial</span></td><td><a href="#m2">M2</a></td></tr>
+        <tr><td class="mono">4.5</td><td>Input</td><td><span class="chip medium">Partial</span></td><td><a href="#m4">M4</a>, <a href="#m5">M5</a></td></tr>
+        <tr><td class="mono">4.6</td><td>Processing (auth-gating, UUIDs, XXE, DEBUG off)</td><td><span class="chip medium">Partial</span></td><td><a href="#h1">H1</a>, <a href="#l12">L12</a></td></tr>
+        <tr><td class="mono">4.7</td><td>Output (security headers, status codes)</td><td><span class="chip secure">Compliant</span></td><td>CSP/HSTS/X-Frame-Options/nosniff all present in <code>server.ts</code></td></tr>
+        <tr><td class="mono">4.8</td><td>CI &amp; CD</td><td><span class="chip low">Non-compliant</span></td><td><a href="#l9">L9</a></td></tr>
+      </table>
+    </div>
+
+    <div class="matrix-group">
+      <h4>§5 Web Service Best Practices (SOAP &amp; REST)</h4>
+      <table class="index">
+        <tr><th>§</th><th>Clause</th><th>Status</th><th>Notes</th></tr>
+        <tr><td class="mono">5.1–5.9</td><td>SOAP/WSDL-specific controls</td><td><span class="chip info">N/A</span></td><td>Architecture uses TanStack Start server-function RPCs over Supabase's internally-mediated REST layer, not a hand-rolled SOAP/WSDL or directly-exposed REST API — most SOAP-specific clauses (WSDL endpoint validation, WS-Security headers, SOAP <code>&lt;Fault&gt;</code> handling) don't map onto this architecture. Equivalent REST-shaped controls (input validation, auth, sensitive-data-in-transit, exception handling, auditing) are covered under §3–§4 above.</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="high-findings">
+    <h2>High Findings <span class="count">3</span></h2>
+
+    <article class="finding" data-sev="high" data-status="resolved" id="h1">
+      <div class="finding-head"><h3>Unvalidated dynamic column key enables mass-assignment on the <code>crs</code> table <span class="finding-id">H1</span></h3><div class="chip-row"><span class="chip high">High</span><span class="chip resolved">Resolved</span></div></div>
+      <div class="guideline-ref">§3.1 Input Validation · §3.11 Database Security · §4.6 API Processing</div>
+      <div class="loc"><b>src/lib/cr-allocation.functions.ts:64-76</b> — <code>assignCrField</code></div>
+      <div class="resolution">
+        <div class="k">Resolution (2026-08-06)</div>
+        <p><code>assignCrField</code> now rejects the request with <code>Forbidden: field must be itpm or ba</code> unless <code>data.field</code> is exactly <code>"itpm"</code> or <code>"ba"</code>, checked immediately before the update call — the same runtime whitelist pattern the sibling function <code>claimCr</code> already used.</p>
+      </div>
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p><code>data.field</code> is typed <code>"itpm" | "ba"</code> at compile time only — the handler runs <code>.update({ [data.field]: data.userName })</code> with no runtime check that <code>field</code> is actually one of those two values. A caller with a valid PMO/Admin session who calls the server-function RPC endpoint directly (bypassing the typed frontend) can set <code>field</code> to any column on <code>crs</code> — <code>workflow_status</code>, <code>is_dropped</code>, <code>title</code>, <code>cr_size</code>, even <code>cr_number</code> — and overwrite it via <code>userName</code>, bypassing the validation and side effects the dedicated endpoints for those columns enforce.</p>
+        <p>This is the exact bug class the team already found and fixed once in a sibling function, <code>updateCrWorkflowStatus</code> (<code>crs-admin.functions.ts</code>), where the target column <b>is</b> checked against a whitelist before use. The sibling function <code>claimCr</code>, in the same file as this bug, also does the runtime check correctly — only <code>assignCrField</code> was missed.</p></div></div>
+        <div class="field"><div class="k">Evidence</div><div class="v"><pre><code>// cr-allocation.functions.ts:64-76 — NOT validated at runtime
+export const assignCrField = createServerFn({ method: "POST" })
+  .inputValidator((data: { crNumber: string; field: "itpm" | "ba"; userName: string | null }) =&gt; data)
+  .handler(async ({ data }) =&gt; {
+    ...
+    .update({ [data.field]: data.userName } as never)</code></pre></div></div>
+        <div class="field"><div class="k">Recommendation</div><div class="v"><p>Add the same runtime whitelist check already used in <code>claimCr</code>: reject the request unless <code>data.field === "itpm"</code> or <code>data.field === "ba"</code>, before the update call.</p></div></div>
+      </details>
+    </article>
+
+    <article class="finding" data-sev="high" data-status="resolved" id="h2">
+      <div class="finding-head"><h3>No idle session timeout configured — policy specifies exactly 15 minutes <span class="finding-id">H2</span></h3><div class="chip-row"><span class="chip high">High</span><span class="chip resolved">Resolved</span></div></div>
+      <div class="guideline-ref">§3.6 Miscellaneous — "Idle session timeout should be configured 15 mins"</div>
+      <div class="loc"><b>src/integrations/supabase/client.ts:50-54</b> · <b>src/lib/current-user.tsx</b></div>
+      <div class="resolution">
+        <div class="k">Resolution (2026-08-06)</div>
+        <p><code>src/lib/current-user.tsx</code> now tracks <code>mousedown</code>/<code>keydown</code>/<code>scroll</code>/<code>touchstart</code> activity and calls <code>supabase.auth.signOut()</code> + redirects to <code>/auth</code> after exactly 15 minutes with none. Supabase-dashboard-level refresh-token TTL capping (the defense-in-depth suggestion) was not made — out of scope for a source-only change.</p>
+      </div>
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p>No idle/inactivity timer exists anywhere in the codebase. <code>persistSession: true</code> and <code>autoRefreshToken: true</code> mean the SDK silently refreshes the access token indefinitely as long as the tab is open — a session left unattended at a desk stays live indefinitely, with no forced expiry tied to inactivity. This is the one clause in the guideline that states a specific numeric control (15 minutes), making it explicitly and unambiguously testable.</p></div></div>
+        <div class="field"><div class="k">Evidence</div><div class="v"><pre><code>auth: { storage: typeof window !== 'undefined' ? localStorage : undefined,
+  persistSession: true, autoRefreshToken: true }</code></pre></div></div>
+        <div class="field"><div class="k">Recommendation</div><div class="v"><p>Add a client-side activity-tracked idle timer (15-minute no-interaction threshold) that calls <code>supabase.auth.signOut()</code> and redirects to <code>/auth</code>; consider also capping the Supabase refresh-token/session TTL in the dashboard as defense-in-depth.</p></div></div>
+      </details>
+    </article>
+
+    <article class="finding" data-sev="high" data-status="accepted" id="h3">
+      <div class="finding-head"><h3>No Multi-Factor Authentication for privileged accounts <span class="finding-id">H3</span></h3><div class="chip-row"><span class="chip high">High</span><span class="chip accepted">Accepted risk</span></div></div>
+      <div class="guideline-ref">§3.3 Authentication and Password Management · §4.1 API Authentication</div>
+      <div class="loc"><b>src/routes/auth.tsx</b> · <b>src/lib/auth.functions.ts</b> · <b>src/lib/gate.functions.ts</b></div>
+      <div class="resolution accepted">
+        <div class="k">Status — accepted, by explicit decision (2026-08-06)</div>
+        <p>User Management (account creation, deletion, and role grants) is not implemented in-app — all of it is done directly against the database, outside any authenticated request path this application serves. There is therefore no in-app privileged action for MFA to protect. The data Admin can see through the app is operational CR/KPI tracking data, not the kind of sensitive record the guideline's "highly sensitive or high value transactional accounts" bar is aimed at. Revisit if in-app user management (<code>src/lib/user-management.functions.ts</code>) is ever re-enabled.</p>
+      </div>
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p>Login is single-factor for every role, including Admin. There is no MFA enrollment UI, no challenge step, and no assurance-level (<code>aal2</code>) check in <code>requireSessionUser</code>. The guideline explicitly requires MFA for "highly sensitive or high value transactional accounts" — Admin, which can create/delete user accounts and grant roles, meets that bar.</p></div></div>
+        <div class="field"><div class="k">Recommendation</div><div class="v"><p>Enable Supabase Auth MFA (TOTP) at minimum for Admin accounts, and gate the most sensitive server functions (account creation/deletion, role changes) on an <code>aal2</code> check.</p></div></div>
+      </details>
+    </article>
+  </section>
+
+  <section id="medium-findings">
+    <h2>Medium Findings <span class="count">11</span></h2>
+
+    <article class="finding" data-sev="medium" data-status="resolved" id="m1">
+      <div class="finding-head"><h3>Deployment-management write paths lack per-CR ownership checks <span class="finding-id">M1</span></h3><div class="chip-row"><span class="chip medium">Medium</span><span class="chip resolved">Resolved</span></div></div>
+      <div class="guideline-ref">§3.5 Access Control — restrict object references / protected functions to authorized users</div>
+      <div class="loc"><b>src/lib/deployment.functions.ts</b> — <code>createDeploymentSchedule</code>, <code>updateDeploymentSchedule</code>, <code>markDeploymentScheduleCompleted</code>, <code>removeCrFromDeployment</code>, <code>updateDeploymentStage</code></div>
+      <div class="resolution">
+        <div class="k">Resolution (2026-08-06)</div>
+        <p>All five functions now enforce per-CR/per-application ownership. <code>createDeploymentSchedule</code> and <code>removeCrFromDeployment</code> were already fixed prior to this pass (schedule creation is PMO-only, scoped to the PMO's SPOC applications; CR removal checks the caller is the CR's actual ba/itpm). This pass closed the remaining three: <code>updateDeploymentSchedule</code> and <code>markDeploymentScheduleCompleted</code> are now PMO-only (ITPM/BA can view a schedule but not edit or complete it), and <code>updateDeploymentStage</code> now checks the caller is the CR's ba/itpm for ITPM/BA, or that the CR's application is in the caller's SPOC list for PMO. The internal-trust-pool position previously accepted internally as H6/M6/M7 is superseded by this change, not merely documented as an exception.</p>
+      </div>
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p><code>assignCrsToDeployment</code> explicitly verifies an ITPM/BA caller owns the CR(s) they're assigning before proceeding. The five functions above share the same role gate (PMO/ITPM/BA) but perform no per-CR ownership check — any ITPM or BA can create, reschedule, complete, or reassign a deployment schedule for CRs they have no relationship to, by supplying an arbitrary <code>scheduleId</code>/<code>crNumber</code> (obtainable legitimately via <code>listPlannedSchedules</code>, not by guessing).</p></div></div>
+        <div class="status-note"><b>Context:</b> three of these five functions (<code>markDeploymentScheduleCompleted</code>, <code>updateDeploymentSchedule</code>, and the read path <code>getDeploymentScheduleCrs</code>) were already reviewed internally as H6/M6/M7 and <b>explicitly accepted as risk</b> — the team's stated position is that PMO/ITPM/BA are treated as one trusted internal operations pool, not segmented per-application. This finding is listed for completeness against the external policy (which calls for restricting protected functions to authorized users without carving out an internal-trust exception) and additionally surfaces two functions — <code>removeCrFromDeployment</code> and <code>updateDeploymentStage</code> — that share the same pattern but were not part of the original internal review scope.</div>
+        <div class="field"><div class="k">Recommendation</div><div class="v"><p>Either extend the same ownership filter used in <code>assignCrsToDeployment</code> to all five functions, or formally document the internal-trust-pool decision as a policy exception with CISO sign-off per guideline §7 (Exceptions), explicitly covering the two newly-identified functions.</p></div></div>
+      </details>
+    </article>
+
+    <article class="finding" data-sev="medium" data-status="progress" id="m2">
+      <div class="finding-head"><h3>No general rate limiting/throttling beyond the login form <span class="finding-id">M2</span></h3><div class="chip-row"><span class="chip medium">Medium</span><span class="chip progress">Partially resolved</span></div></div>
+      <div class="guideline-ref">§3.5 Access Control · §4.4 API Access — "Limit requests (Throttling) to avoid DDoS / brute-force attacks"</div>
+      <div class="loc"><b>src/lib/kpi-engine.ts:253</b> (<code>recalculateAllKpis</code>) · <b>src/lib/csv-import.ts</b> · <b>src/lib/defect-import.ts</b> · all other server functions</div>
+      <div class="resolution progress">
+        <div class="k">Partially resolved (2026-08-06)</div>
+        <p><code>recalculateAllKpis</code> — the specific full-table-scan function this finding calls out — now enforces a 2-minute cooldown between runs, reusing the existing <code>kpi_engine_lock</code> singleton row's <code>started_at</code> instead of a separate rate-limit table. The broader recommendation (a general per-user/per-IP limiter across all state-changing functions) was explicitly deferred — accepted as risk for now: none of the other functions in scope do full-table work, and the team's position is that general throttling belongs in the onboarding-hardening pass rather than now.</p>
+      </div>
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p>The only rate limiting in the codebase is the sign-in lockout (5 attempts / 15-minute window). Every other authenticated server function — including <code>recalculateAllKpis</code>, which any user holding any role can trigger and which performs a full-table scan/lock/delete/insert across <code>crs</code>, <code>kpis</code>, and <code>kpi_results</code> — has no per-user or per-IP throttle. A malicious or compromised low-privilege account could repeatedly invoke heavy endpoints to degrade the database.</p></div></div>
+        <div class="field"><div class="k">Recommendation</div><div class="v"><p>Add a lightweight per-user/per-IP rate limit (same pattern as <code>login_attempts</code>) on state-changing or expensive server functions, particularly bulk import/export and KPI recalculation.</p></div></div>
+      </details>
+    </article>
+
+    <article class="finding" data-sev="medium" data-status="resolved" id="m3">
+      <div class="finding-head"><h3>No structured security-event audit logging <span class="finding-id">M3</span></h3><div class="chip-row"><span class="chip medium">Medium</span><span class="chip resolved">Resolved</span></div></div>
+      <div class="guideline-ref">§3.7 Error Handling and Logging — log authentication attempts, access-control failures, admin actions</div>
+      <div class="loc"><b>src/integrations/supabase/auth-middleware.ts</b> · <b>src/lib/gate.functions.ts:76-79</b> · <b>src/lib/auth.functions.ts</b></div>
+      <div class="resolution">
+        <div class="k">Resolution (2026-08-06)</div>
+        <p>New append-only <code>security_events</code> table, written from a shared <code>logSecurityEvent()</code> helper in <code>src/lib/gate.functions.ts</code>. Wired into the two real denial chokepoints — <code>requireSessionUser</code> (a verified Supabase identity with no/inactive <code>user_management</code> row) and <code>assertHasRoleOrAdmin</code> (authenticated but no role assigned) — plus successful sign-in in <code>auth.functions.ts</code>. Deliberately <b>not</b> wired into every successfully-authorized request (would add a DB write to nearly every page load) or the "no Bearer token yet" branch of <code>requireSessionUser</code> (hit constantly by anonymous session polling — not a meaningful signal on its own). role_change/account-creation events were not added — that admin surface is still DB-only/disabled, per the same reasoning already applied to H3.</p>
+      </div>
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p>Failed login attempts are logged to a dedicated table (good). However, successful logins, authorization-denied events (<code>requireSessionUser</code>/<code>assertHasRoleOrAdmin</code> throws), input-validation failures, and privileged admin actions (role changes, account creation/deactivation) are not recorded anywhere queryable — only transient <code>console.error</code> on unexpected system errors. This limits incident-response and forensic capability.</p></div></div>
+        <div class="field"><div class="k">Recommendation</div><div class="v"><p>Add an append-only <code>security_events</code> table capturing actor, event type (login_success, login_failure, access_denied, role_change, etc.), timestamp, and route — written from the centralized gate functions and any admin-mutation server functions.</p></div></div>
+      </details>
+    </article>
+
+    <article class="finding" data-sev="medium" data-status="resolved" id="m4">
+      <div class="finding-head"><h3>Zod present as a dependency but not wired into server-function input validators <span class="finding-id">M4</span></h3><div class="chip-row"><span class="chip medium">Medium</span><span class="chip resolved">Resolved</span></div></div>
+      <div class="guideline-ref">§3.1 Input Validation — centralized, type/length/format-checked validation routine</div>
+      <div class="loc"><b>all <code>src/lib/*.functions.ts</code></b> — every <code>.inputValidator(...)</code> call</div>
+      <div class="resolution">
+        <div class="k">Resolution (2026-08-06)</div>
+        <p>Every <code>createServerFn(...).inputValidator(...)</code> across all 15 <code>src/lib/*.functions.ts</code> files (41 functions total — more than this finding's original ~35 estimate) now runs a real <code>zod</code> schema via a shared <code>validated()</code> helper in the new <code>src/lib/validation.ts</code>, replacing the identity pass-through. Deliberately one blanket rule rather than per-field business schemas (<code>z.strict().object({...})</code> with format/enum rules per field, as originally recommended) — this app's real data (CR numbers, names, remarks) has no fixed format, so a strict per-field schema would be guesswork; every string field is capped at 500 characters, booleans/numbers keep their real type (not coerced to strings, since several are used in arithmetic/conditionals downstream), and arrays get a generous length cap. Two deliberate exceptions: <code>getSecurityReport</code>'s validator was left as-is (already fully constrains output to one of two known values, not actually an identity pass-through); and the CSV/defect bulk-import row validators (<code>csv-import.ts</code>, <code>defect-import.ts</code>) validate row *shape* only, no per-cell 500-char cap, since legitimate CMS-imported columns can exceed that — row count is already capped separately by the existing <code>assertRowCountOk</code>.</p>
+      </div>
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p>Every <code>createServerFn(...).inputValidator(...)</code> in the codebase is an identity pass-through — a TypeScript compile-time annotation with no runtime shape/type/length checking. <code>zod</code> is a dependency and is used exactly once in the entire app, for a route search-param schema, never for any of the roughly 35 server-function inputs. The project's own prior internal report corroborates this as an open, unaddressed item.</p></div></div>
+        <div class="field"><div class="k">Evidence</div><div class="v"><pre><code>// cr-updates.functions.ts:38 — typed only, not runtime-validated
+.inputValidator((data: { crNumber: string; updateText: string }) =&gt; data)</code></pre></div></div>
+        <div class="field"><div class="k">Recommendation</div><div class="v"><p>Replace identity <code>inputValidator</code>s with <code>zod</code> schemas (<code>z.object({...}).strict()</code>) enforcing type/length/format per field, starting with all POST/mutation server functions.</p></div></div>
+      </details>
+    </article>
+
+    <article class="finding" data-sev="medium" data-status="resolved" id="m5">
+      <div class="finding-head"><h3>File size limit enforced only client-side; bypassable via direct server-function call <span class="finding-id">M5</span></h3><div class="chip-row"><span class="chip medium">Medium</span><span class="chip resolved">Resolved</span></div></div>
+      <div class="guideline-ref">§3.12 File Management · §4.5 API Input</div>
+      <div class="loc"><b>src/lib/upload-limits.ts:11-18</b> — consumed only by client-callable wrappers, not by the <code>.handler()</code> bodies in <code>csv-import.ts</code>, <code>defect-import.ts</code>, <code>test-cases.functions.ts</code></div>
+      <div class="resolution">
+        <div class="k">Resolution (2026-08-06)</div>
+        <p>New <code>assertPayloadSizeOk()</code> in <code>src/lib/upload-limits.ts</code>, called inside all three handlers (<code>importCrRows</code>, <code>importDefectRows</code>, <code>uploadTestCases</code>) alongside the existing row-count check. Since the original file's bytes never reach the server (parsing is client-side; only the parsed <code>rows</code> array is POSTed), this checks the serialized size of that payload instead — the actual thing a direct/bypassing call would be sending — against the same ceiling. The limit was also lowered from 10 MB to 5 MB per updated policy.</p>
+      </div>
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p><code>assertFileSizeOk(file)</code> runs only in the exported client-callable wrapper functions, never inside the actual <code>createServerFn</code> handlers. Because parsing happens in the browser and only the parsed <code>rows</code> array is POSTed, a caller invoking the server-function endpoint directly bypasses the 10MB check entirely. The row-count cap (10,000 rows) does still apply server-side, but there is no server-side cap on aggregate payload/field byte size.</p></div></div>
+        <div class="field"><div class="k">Recommendation</div><div class="v"><p>Add a server-side aggregate payload-size guard inside each handler (e.g. total serialized size or max-per-field length), not just a row-count check.</p></div></div>
+      </details>
+    </article>
+
+    <article class="finding" data-sev="medium" data-status="resolved" id="m6">
+      <div class="finding-head"><h3>No Cache-Control headers on authenticated/sensitive pages <span class="finding-id">M6</span></h3><div class="chip-row"><span class="chip medium">Medium</span><span class="chip resolved">Resolved</span></div></div>
+      <div class="guideline-ref">§3.8 Data Protection — "Disable client-side caching on pages containing sensitive information"</div>
+      <div class="loc"><b>src/server.ts:29-54</b> — <code>securityHeaders()</code></div>
+      <div class="resolution">
+        <div class="k">Resolution (2026-08-06)</div>
+        <p><code>Cache-Control: no-store, must-revalidate</code> and <code>Pragma: no-cache</code> added to <code>securityHeaders()</code>, applied globally via the existing <code>withSecurityHeaders()</code> wrapper. Safe against static-asset caching regressions because that wrapper is additive-only — it only sets a header when the response doesn't already carry one, so hashed JS/CSS bundle responses that set their own long-lived <code>Cache-Control</code> are unaffected.</p>
+      </div>
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p>The server sets a strong set of security headers (CSP, X-Frame-Options, HSTS, etc.) but no <code>Cache-Control</code>/<code>Pragma</code> header anywhere. Pages showing CR data, KPI results, test cases, and the internal security report itself could be retained in browser history/back-forward cache on a shared device.</p></div></div>
+        <div class="field"><div class="k">Recommendation</div><div class="v"><p>Add <code>Cache-Control: no-store</code> at minimum for authenticated/data routes and the <code>/security-report</code> route, either globally in <code>securityHeaders()</code> or per-route.</p></div></div>
+      </details>
+    </article>
+
+    <article class="finding" data-sev="medium" data-status="progress" id="m7">
+      <div class="finding-head"><h3><code>xlsx</code> dependency sourced from an unpinned, non-registry CDN tarball <span class="finding-id">M7</span></h3><div class="chip-row"><span class="chip medium">Medium</span><span class="chip progress">Partially resolved</span></div></div>
+      <div class="guideline-ref">§3.10 System Configuration — approved/patched component versions · §4.8 CI/CD — dependency scanning</div>
+      <div class="loc"><b>package.json:69</b> — <code>"xlsx": "https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz"</code></div>
+      <div class="resolution progress">
+        <div class="k">Partially resolved (2026-08-06)</div>
+        <p><code>package.json</code> now pins <code>xlsx</code> to <code>https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz</code> (the version already installed — no behavior change) instead of the <code>-latest</code> moving target; confirmed the npm registry's own last-published version is 0.18.5, several years stale, so a registry-mirror move isn't viable without a real downgrade. <code>package-lock.json</code> regenerated against the pinned URL, which captures a sha512 integrity hash automatically. <code>bun.lock</code> was <b>not</b> regenerated — no <code>bun</code> binary available in this environment — so it still needs a manual <code>bun install</code> to pick up the pinned URL and close the lockfile-drift half of this finding.</p>
+      </div>
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p><code>xlsx-latest</code> is a moving target on SheetJS's own CDN rather than a pinned npm-registry version — the exact code fetched on a fresh install isn't locked to an immutable version/hash the way a registry+lockfile dependency would be. <code>bun.lock</code> and <code>package-lock.json</code> were also found to resolve this package differently, indicating lockfile drift between the two package managers in use.</p></div></div>
+        <div class="field"><div class="k">Recommendation</div><div class="v"><p>Pin to an explicit, versioned SheetJS tarball URL with a captured integrity hash, or move to an npm-registry-published mirror; reconcile the bun/npm lockfile discrepancy so both tools resolve the same artifact.</p></div></div>
+      </details>
+    </article>
+
+    <article class="finding" data-sev="medium" data-status="accepted" id="m8">
+      <div class="finding-head"><h3>No in-app password reset, no forced change on first login, no re-authentication before critical actions <span class="finding-id">M8</span></h3><div class="chip-row"><span class="chip medium">Medium</span><span class="chip accepted">Accepted risk</span></div></div>
+      <div class="guideline-ref">§3.3 Authentication and Password Management · §3.6 Miscellaneous</div>
+      <div class="loc"><b>src/routes/auth.tsx</b> · <b>src/lib/user-management.functions.ts</b> (account-creation path, currently disabled) · <b>src/routes/users.tsx:317</b></div>
+      <div class="resolution accepted">
+        <div class="k">Status — accepted, by explicit decision (2026-08-06)</div>
+        <p>Credential lifecycle (password reset, forced first-login change, password strength) will move to Active Directory / SSO once the application is onboarded there, making an in-app password-reset flow and first-login-change mechanic obsolete before they'd ever ship. The third gap — re-authentication before destructive actions — is moot for the same reason M8's own location list already shows: the only code path it would apply to (account deletion/role-grant in <code>user-management.functions.ts</code>) is currently fully disabled, not a live feature (see H4).</p>
+      </div>
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p>Three related gaps bundled together: (1) no "forgot password" flow exists in-app — resets are presumably handled manually via the Supabase dashboard, which is unauditable from source and doesn't enforce forced-change-on-next-use or user notification; (2) the one code path that ever set a password (now disabled) had no forced-change-on-first-login mechanic and an explicit unresolved <code>TODO</code> for password-strength enforcement; (3) destructive actions like account deletion rely on a browser <code>confirm()</code> dialog only, with no fresh re-authentication step.</p></div></div>
+        <div class="field"><div class="k">Recommendation</div><div class="v"><p>Implement <code>supabase.auth.resetPasswordForEmail()</code> with a dedicated confirm-password route and forced-change flag; add a step-up re-authentication check before Admin account deletion/role-grant operations.</p></div></div>
+      </details>
+    </article>
+
+    <article class="finding" data-sev="medium" data-status="resolved" id="m9">
+      <div class="finding-head"><h3>No concurrent-login prevention for the same user ID <span class="finding-id">M9</span></h3><div class="chip-row"><span class="chip medium">Medium</span><span class="chip resolved">Resolved</span></div></div>
+      <div class="guideline-ref">§3.4 Session Management — "Do not allow concurrent logins with the same user ID"</div>
+      <div class="loc"><b>src/lib/auth.functions.ts</b> · <b>src/integrations/supabase/client.ts</b></div>
+      <div class="resolution">
+        <div class="k">Resolution (2026-08-06)</div>
+        <p>New <code>user_management.current_session_id</code> column records the Supabase Auth JWT <code>session_id</code> claim of the most recent login (set in <code>signIn</code>, <code>src/lib/auth.functions.ts</code>). <code>requireSessionUser</code> (<code>src/lib/gate.functions.ts</code>) — the chokepoint every server function already calls — rejects any request whose JWT <code>session_id</code> doesn't match it, logged as an <code>access_denied</code> security event. Logging in from a second device overwrites the column, superseding the first device on its next action (next-request enforcement, not an instant real-time kick — no push channel exists to force a stale tab off mid-session). Basic version implemented, not the polished one: a superseded device sees its next action fail with a generic error toast (existing per-page error handling), not an automatic sign-out + redirect to <code>/auth</code> — that would require wiring a global query-error interceptor, which wasn't built here. One-time effect on rollout: every account signed in before this shipped gets superseded on its next request, since the column starts null — a required, expected cutover, not a bug.</p>
+      </div>
+      <details class="original">
+        <summary>Original finding detail</summary>
+        <div class="field"><div class="k">Description</div><div class="v"><p>Nothing in the app or visible Supabase configuration restricts a single account to one active session — the same credentials can be used simultaneously from multiple devices/browsers.</p></div></div>
+        <div class="field"><div class="k">Recommendation</div><div class="v"><p>Track active session/refresh-token identifiers per user server-side and revoke prior sessions on new login, if single-session-per-user is a hard business requirement; otherwise document as an accepted exception.</p></div></div>
+      </details>
+    </article>
+
+    <article class="finding" data-sev="medium" id="m10">
+      <div class="finding-head"><h3>Session tokens held in <code>localStorage</code>, not an HttpOnly/Secure cookie <span class="finding-id">M10</span></h3><div class="chip-row"><span class="chip medium">Medium</span><span class="chip low">Previously reviewed — see §Accepted risk</span></div></div>
+      <div class="guideline-ref">§3.4 Session Management</div>
+      <div class="loc"><b>src/integrations/supabase/client.ts:51</b></div>
+      <div class="field"><div class="k">Description</div><div class="v"><p>Session tokens sit in <code>localStorage</code>, readable by any script running in-origin, rather than an HttpOnly/Secure cookie as the guideline specifies. This was already reviewed internally (item L2) and accepted as risk on the basis that no active XSS injection point was found — a mitigating factor, not a policy pass. Carried forward here since it remains open against the external guideline text.</p></div></div>
+      <div class="field"><div class="k">Recommendation</div><div class="v"><p>If a concrete driver justifies the cost, move to a server-brokered httpOnly-cookie session; otherwise keep as a documented, periodically re-reviewed exception.</p></div></div>
+    </article>
+
+    <article class="finding" data-sev="medium" id="m11">
+      <div class="finding-head"><h3>Deactivated users' session is not force-revoked <span class="finding-id">M11</span></h3><div class="chip-row"><span class="chip medium">Medium</span><span class="chip low">Previously reviewed — see §Accepted risk</span></div></div>
+      <div class="guideline-ref">§3.5 Access Control — "terminate sessions when authorization ceases"</div>
+      <div class="loc"><b>src/lib/gate.functions.ts:55-57</b></div>
+      <div class="field"><div class="k">Description</div><div class="v"><p><code>requireSessionUser</code> checks <code>is_active</code> on every request, so a deactivated user is blocked from all app data immediately — but the underlying Supabase Auth session/refresh token isn't force-revoked and keeps silently refreshing until natural expiry. Already reviewed and accepted internally (item M3) on the basis that the session can no longer reach any data, only remain nominally "alive."</p></div></div>
+      <div class="field"><div class="k">Recommendation</div><div class="v"><p>Consider a Postgres trigger + Auth Admin API call (<code>supabaseAdmin.auth.admin.signOut(userId)</code>) on deactivation, previously scoped and set aside for infrastructure cost — worth re-costing now that it is flagged against an external compliance policy.</p></div></div>
+    </article>
+  </section>
+
+  <section id="low-findings">
+    <h2>Low &amp; Informational Findings <span class="count">14</span></h2>
+    <p class="lede">Lower-severity gaps and items that could not be fully determined from source alone (typically because the control is delegated to the Supabase platform or an external build-config package). Presented condensed; each remains a real line item against the guideline.</p>
+
+    <div class="finding" data-sev="low">
+      <div class="compact-row" id="l1"><div class="id mono">L1 · Low</div><div class="desc"><b>No "last login date &amp; time" shown to the user.</b> §3.6 explicitly requires it. Supabase tracks <code>last_sign_in_at</code> on <code>auth.users</code> but the app never surfaces it. <div class="loc"><b>src/components/app-shell.tsx</b> · <b>src/lib/gate.functions.ts</b></div></div><div></div></div>
+      <div class="compact-row" id="l2"><div class="id mono">L2 · Low</div><div class="desc"><b>No password reuse prevention or minimum password age enforced.</b> No history table exists; Supabase Auth doesn't natively provide this. §3.3. <div class="loc"><b>src/lib/user-management.functions.ts</b></div></div><div></div></div>
+      <div class="compact-row" id="l3"><div class="id mono">L3 · Low</div><div class="desc"><b>Sessions are effectively "remember me" by default</b> (<code>persistSession</code> + <code>autoRefreshToken</code>, no opt-in control) — policy calls for disabling remember-me on password logins. Mitigated once H2's idle timeout ships. <div class="loc"><b>src/integrations/supabase/client.ts:50-54</b></div></div><div></div></div>
+      <div class="compact-row" id="l4"><div class="id mono">L4 · Low</div><div class="desc"><b>File type allowlist is a client-side <code>accept</code> attribute only</b> — no server-side magic-byte verification. Risk is reduced by the fact non-conforming content simply fails client-side parsing and nothing is persisted as a file server-side. <div class="loc"><b>src/routes/upload.tsx</b> · <b>src/routes/test-case-upload.tsx</b></div></div><div></div></div>
+      <div class="compact-row" id="l5"><div class="id mono">L5 · Low</div><div class="desc"><b>No explicit dangerous-character (<code>&lt; &gt; " ' % ( ) &amp; +</code>) allow/deny-list on input.</b> Offset by React's JSX auto-escaping and parameterized Supabase queries, but the letter of §3.1 isn't formally met.</div><div></div></div>
+      <div class="compact-row" id="l6"><div class="id mono">L6 · Low</div><div class="desc"><b>No length/format constraints on free-text fields</b> (update notes, comments, remarks) — Postgres <code>text</code> columns with no CHECK constraint, no app-level max-length. <div class="loc"><b>src/lib/cr-updates.functions.ts:41</b></div></div><div></div></div>
+      <div class="compact-row" id="l7"><div class="id mono">L7 · Low</div><div class="desc"><b>Authorization is enforced by per-function convention, not framework-enforced middleware.</b> A defined <code>requireSupabaseAuth</code> middleware exists but is never registered globally — every <code>createServerFn</code> individually calls the auth gate today (verified, no active gap), but a newly added function that forgets the call would be silently exposed. <div class="loc"><b>src/integrations/supabase/auth-middleware.ts</b> · <b>src/start.ts</b></div></div><div></div></div>
+      <div class="compact-row" id="l8"><div class="id mono">L8 · Low</div><div class="desc"><b>Missing <code>robots.txt</code>.</b> Minimal real risk for an internal/authenticated app, but no explicit crawl directive exists. §3.10. <div class="loc"><b>public/</b></div></div><div></div></div>
+      <div class="compact-row" id="l9"><div class="id mono">L9 · Low</div><div class="desc"><b>No CI/CD pipeline, automated tests, code-review gate, or SCA/dependency scanning.</b> No <code>.github/workflows</code>, no test script/files, no pre-commit hooks, no documented rollback plan. §4.8 is effectively unimplemented in this repo. <div class="loc">repository root · <b>package.json</b></div></div><div></div></div>
+      <div class="compact-row" id="l10"><div class="id mono">L10 · Low</div><div class="desc"><b>Password field doesn't set <code>autoComplete="off"</code></b> (uses <code>autoComplete="current-password"</code> instead). Flagged for literal §3.8 compliance, though note this is the current OWASP-recommended value for login forms — recommend documenting an exception rather than changing it. <div class="loc"><b>src/routes/auth.tsx:84</b></div></div><div></div></div>
+      <div class="compact-row" id="l11"><div class="id mono">L11 · Info / CND</div><div class="desc"><b>Password complexity/length policy and JWT TTL/signing-secret strength are Supabase-platform-managed</b> and not visible from source — <code>supabase/config.toml</code> has no local <code>[auth]</code> block. Cannot confirm compliance from this repository alone; verify directly in the Supabase project dashboard.</div><div></div></div>
+      <div class="compact-row" id="l12"><div class="id mono">L12 · Info / CND</div><div class="desc"><b>Production sourcemap/debug output posture not verifiable</b> — build configuration is delegated to an external shared package (<code>@lovable.dev/vite-tanstack-config</code>) not vendored in this repo. No debug flags found in application code itself. <div class="loc"><b>vite.config.ts</b></div></div><div></div></div>
+      <div class="compact-row" id="l13"><div class="id mono">L13 · Info</div><div class="desc"><b>No anti-malware/AV scanning of uploads.</b> Low practical risk here specifically because no uploaded file is ever persisted as a file or to storage — everything is parsed client-side into structured rows.</div><div></div></div>
+      <div class="compact-row" id="l14"><div class="id mono">L14 · Info</div><div class="desc"><b>Removal of fingerprinting headers (<code>X-Powered-By</code>, <code>Server</code>) not verifiable from source</b> — the app's header logic is additive-only and never strips headers; actual emission depends on the Nitro/Cloudflare runtime adapter, outside repo scope.</div><div></div></div>
+    </div>
+  </section>
+
+  <section id="accepted">
+    <h2>Cross-Reference: Previously Reviewed &amp; Accepted Internally</h2>
+    <p class="lede">The team's own internal VAPT pass (<code>src/security-reports/vapt-report.html</code>, July 2026) already reviewed several of the items above and made an explicit, documented decision to accept them as risk rather than fix them. They are restated here because internal risk-acceptance and external policy compliance are not the same thing — under TAGIC-IR-GL-001 §7/§8.2, any exception to an applicable control requires CISO sign-off to be a formally closed item, not just an engineering-team decision.</p>
+    <table class="index">
+      <tr><th>Internal ID</th><th>Item</th><th>Maps to</th><th>Internal rationale</th></tr>
+      <tr><td class="mono">L2</td><td>Session tokens in <code>localStorage</code></td><td><a href="#m10">M10</a></td><td>SDK default; no active XSS vector found to justify a server-brokered-cookie rearchitecture</td></tr>
+      <tr><td class="mono">M3</td><td>Deactivated user keeps a live JWT until expiry</td><td><a href="#m11">M11</a></td><td><code>is_active</code> checked on every request closes actual data access; only the token itself stays nominally valid</td></tr>
+      <tr><td class="mono">H6 / M6 / M7</td><td>Deployment schedule actions unrestricted by CR ownership</td><td><a href="#m1">M1</a> — <b>superseded, see status note</b></td><td>Formerly: PMO/ITPM/BA treated as one trusted internal operations pool. No longer the current position — M1 was fixed (2026-08-06) with real per-CR/per-application ownership checks, not carried forward as an accepted exception.</td></tr>
+      <tr><td class="mono">C3 (partial)</td><td>Legacy Supabase <code>service_role</code> key left unrevoked; four UAT employee passwords unreset</td><td>—</td><td>Blast radius bounded to a UAT-only environment; production will use a freshly-provisioned, unrelated user set</td></tr>
+    </table>
+  </section>
+
+  <section id="secure">
+    <h2>Verified Compliant Areas <span class="count">selected highlights</span></h2>
+    <p class="lede">These are not exhaustive — see the compliance matrix above for full section-by-section status — but represent the controls most worth calling out as genuinely well-implemented.</p>
+    <div class="secure-grid">
+      <article class="finding" data-sev="low"><div class="finding-head"><h3>RLS locked to <code>service_role</code> only</h3><span class="chip secure">Compliant</span></div><p>Every application table's open policy was dropped; <code>anon</code>/<code>authenticated</code> grants revoked repo-wide. All access is mediated by service-role server functions. §3.11.</p></article>
+      <article class="finding" data-sev="low"><div class="finding-head"><h3>No SQL injection surface</h3><span class="chip secure">Compliant</span></div><p>All data access goes through the parameterized supabase-js query builder; the one dynamic-column-key write path is validated by whitelist. §3.11, §4.6.</p></article>
+      <article class="finding" data-sev="low"><div class="finding-head"><h3>No exploitable XSS sink</h3><span class="chip secure">Compliant</span></div><p>React's JSX auto-escaping covers every render path; the sole <code>dangerouslySetInnerHTML</code> builds CSS from developer-supplied config, never user input. §3.2.</p></article>
+      <article class="finding" data-sev="low"><div class="finding-head"><h3>CSRF structurally mitigated</h3><span class="chip secure">Compliant</span></div><p>Server functions authenticate via an <code>Authorization: Bearer</code> header, not an ambient cookie — a cross-site request cannot forge this. §3.4.</p></article>
+      <article class="finding" data-sev="low"><div class="finding-head"><h3>JWTs verified properly server-side</h3><span class="chip secure">Compliant</span></div><p><code>supabase.auth.getClaims(token)</code> is used everywhere — never hand-decoded, never trusts a client-supplied algorithm. §4.2.</p></article>
+      <article class="finding" data-sev="low"><div class="finding-head"><h3>No secrets in the client bundle</h3><span class="chip secure">Compliant</span></div><p>The service-role client is only ever dynamically imported inside server-function handler bodies — confirmed via a repo-wide static-import check. §3.8.</p></article>
+      <article class="finding" data-sev="low"><div class="finding-head"><h3>Strong security-header baseline</h3><span class="chip secure">Compliant</span></div><p>CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy and Permissions-Policy are all applied on every response, including error paths. §4.7.</p></article>
+      <article class="finding" data-sev="low"><div class="finding-head"><h3>Formula/CSV injection protected on export</h3><span class="chip secure">Compliant</span></div><p>Every exported cell is passed through a sanitizer that force-strings any value beginning with <code>= + - @</code>, tab, or CR. §3.1, §3.2.</p></article>
+    </div>
+  </section>
+
+  <section id="roadmap">
+    <h2>Remediation Roadmap</h2>
+    <p class="lede">Ordered by risk-reduction per unit of effort, not strictly by severity — a couple of Medium items are cheap, high-leverage fixes worth doing before the High items that need more design discussion.</p>
+    <div class="status-note resolved"><b>Progress as of 2026-08-06:</b> items 1–6 below are done. Of item 7's batch, H3 and M8 were decided as accepted risk (documented in their own finding notes) and M1/M9 were fixed outright — only M10/M11 remain open decisions. Item 8 (CI/CD) is still open.</div>
+    <ol class="roadmap">
+      <li><span class="n">1</span><div><b>Fix H1</b> — add the missing runtime whitelist check in <code>assignCrField</code>. Smallest possible change (mirrors code already present two functions away), closes the only genuine new access-control defect found. <i>Done.</i></div></li>
+      <li><span class="n">2</span><div><b>Ship H2</b> — 15-minute idle timeout. Directly closes an explicitly-worded, easily-tested policy clause. <i>Done.</i></div></li>
+      <li><span class="n">3</span><div><b>Add M6's <code>Cache-Control: no-store</code></b> — one line in the existing <code>securityHeaders()</code> function. <i>Done.</i></div></li>
+      <li><span class="n">4</span><div><b>Pin M7's <code>xlsx</code> dependency</b> to an explicit versioned tarball with an integrity hash; reconcile bun/npm lockfile drift. <i>Done (npm side) — <code>bun.lock</code> still needs a manual <code>bun install</code>.</i></div></li>
+      <li><span class="n">5</span><div><b>Wire up M4</b> — introduce <code>zod</code> validators on server functions incrementally, prioritizing the mutation endpoints identified across this report. <i>Done — all 41 functions, not just mutations.</i></div></li>
+      <li><span class="n">6</span><div><b>Stand up M3's audit-event table</b> and M2's general rate limiter — both follow the exact pattern already proven by <code>login_attempts</code>. <i>Done — M3 fully; M2 partially (the one heavy function fixed, general limiter deferred).</i></div></li>
+      <li><span class="n">7</span><div><b>Decide H3 (MFA) and M1/M8/M9/M10/M11 as a batch</b> — these are genuine policy/architecture calls (MFA rollout, deployment-module ownership model, session-storage model) that need a product/security decision, not just a code change. Where the decision is to keep current behavior, formalize it as a signed exception per §7/§8.2 rather than leaving it implicit. <i>H3, M8 accepted as risk; M1, M9 fixed. M10/M11 still open.</i></div></li>
+      <li><span class="n">8</span><div><b>Stand up minimal CI/CD (L9)</b> — lint + typecheck on every PR as a required check, then layer in tests and SCA/dependency scanning (which would have caught M7 automatically).</div></li>
+    </ol>
+  </section>
+
+  <section id="appendix">
+    <h2>Appendix</h2>
+    <div class="field"><div class="k">Reference document</div><div class="v"><p><code>Application API and Secure Coding Guidelines.pdf</code> — TAGIC-IR-GL-001 v1.5, Tata AIG General Insurance Company Limited, released 21-Jan-2021, reviewed 30-Jan-2026.</p></div></div>
+    <div class="field"><div class="k">Methodology</div><div class="v"><p>Four parallel, independent static-analysis workstreams reviewed: (1) authentication/session/password management and API auth (JWT/OAuth); (2) access control and database security across all 25 Supabase migrations; (3) input validation, output encoding, and file handling; (4) error handling/logging, data protection, communication security, system configuration/headers, and CI/CD. Each workstream cross-checked findings against the codebase directly rather than trusting the prior internal report at face value. No dynamic penetration test, fuzzing, or live-endpoint scanning was performed — this is a source-code-only assessment. Controls delegated to the Supabase platform (password policy enforcement, JWT secret/TTL, infrastructure-level rate limiting) or an external build-tooling package are marked Could-Not-Determine rather than assumed compliant or non-compliant.</p></div></div>
+    <div class="field"><div class="k">Disclaimer</div><div class="v"><p>This report reflects the state of the working tree at assessment time (2026-08-04) and supersedes nothing in the team's own internal report — it is intended to sit alongside it, mapped specifically to the TATA AIG guideline's clause numbering rather than OWASP Top 10 categories. Findings marked "Previously reviewed — accepted internally" are restated for completeness against the external policy, not because the internal decision was judged incorrect.</p></div></div>
+  </section>
+
+  <footer>
+    Prepared as a source-code compliance assessment against TAGIC-IR-GL-001 v1.5. Scope: full repository working tree. No production/hosting-environment configuration was inspected beyond what is present in source. For questions on any finding's severity rating or recommended remediation, review the corresponding file:line reference and guideline clause cited above.
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STATUS_KEY = "tagicComplianceReport:findingStatus:v1";
+  var STATUSES = ["open", "progress", "resolved"];
+  var STATUS_LABEL = { open: "Open", progress: "In progress", resolved: "Resolved" };
+  var CHEVRON = '<svg class="chevron" viewBox="0 0 16 16" fill="none" aria-hidden="true">'
+    + '<path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function loadStatus() {
+    try { return JSON.parse(localStorage.getItem(STATUS_KEY) || "{}"); } catch (e) { return {}; }
+  }
+  function saveStatus(map) {
+    try { localStorage.setItem(STATUS_KEY, JSON.stringify(map)); } catch (e) { /* private-mode / disabled storage — status just won't persist */ }
+  }
+  var statusMap = loadStatus();
+
+  // Baked-in document status (data-status="resolved"/"accepted"/"progress" on
+  // the article, set directly in the HTML as findings get fixed) seeds the
+  // default button state for a first-time visitor — "accepted" maps to
+  // "resolved" here since this 3-state tracker only distinguishes
+  // open/in-progress/done; the actual resolved-vs-accepted-risk distinction
+  // stays visible via the chip in the finding header regardless. A
+  // visitor's own localStorage override, once they click a button, still
+  // wins over this seed on every later visit.
+  function seedStatus(defaultStatus) {
+    if (defaultStatus === "accepted") return "resolved";
+    if (defaultStatus === "resolved" || defaultStatus === "progress") return defaultStatus;
+    return "open";
+  }
+
+  function buildStatusGroup(id, defaultStatus) {
+    var wrap = document.createElement("div");
+    wrap.className = "status-group";
+    wrap.setAttribute("data-status-group", "");
+    wrap.setAttribute("data-id", id);
+    wrap.setAttribute("data-default", seedStatus(defaultStatus));
+    STATUSES.forEach(function (s) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.dataset.status = s;
+      btn.textContent = STATUS_LABEL[s];
+      btn.setAttribute("aria-pressed", String((statusMap[id] || seedStatus(defaultStatus)) === s));
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        statusMap[id] = s;
+        saveStatus(statusMap);
+        Array.prototype.forEach.call(wrap.querySelectorAll("button"), function (b) {
+          b.setAttribute("aria-pressed", String(b.dataset.status === s));
+        });
+        updateProgress();
+      });
+      wrap.appendChild(btn);
+    });
+    return wrap;
+  }
+
+  // ---- Progressively enhance the detailed finding cards (High + Medium) ----
+  var detailedFindings = Array.prototype.filter.call(
+    document.querySelectorAll("article.finding[id]"),
+    function (el) { return el.querySelector(".field"); }
+  );
+
+  detailedFindings.forEach(function (el) {
+    var id = el.id;
+    var head = el.querySelector(".finding-head");
+    var h3 = head.querySelector("h3");
+    var chipRow = head.querySelector(".chip-row");
+
+    var toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "finding-toggle";
+    toggle.setAttribute("aria-expanded", "true");
+    toggle.innerHTML = CHEVRON;
+    head.insertBefore(toggle, h3);
+    toggle.appendChild(h3);
+
+    if (chipRow) chipRow.appendChild(buildStatusGroup(id, el.dataset.status));
+
+    var body = document.createElement("div");
+    body.className = "finding-body";
+    var node = head.nextSibling;
+    var toMove = [];
+    while (node) { toMove.push(node); node = node.nextSibling; }
+    toMove.forEach(function (n) { body.appendChild(n); });
+    el.appendChild(body);
+
+    // High findings start expanded (most actionable); Medium starts collapsed to keep the page scannable.
+    var collapsed = el.dataset.sev !== "high";
+    el.dataset.collapsed = collapsed ? "true" : "false";
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+
+    toggle.addEventListener("click", function () {
+      var nowCollapsed = el.dataset.collapsed !== "true";
+      el.dataset.collapsed = nowCollapsed ? "true" : "false";
+      toggle.setAttribute("aria-expanded", String(!nowCollapsed));
+    });
+  });
+
+  // ---- Progressively enhance the compact rows (Low / Info section) ----
+  var compactRows = document.querySelectorAll(".compact-row[id]");
+  Array.prototype.forEach.call(compactRows, function (row) {
+    var id = row.id;
+    var idCell = row.querySelector(".id");
+    var sevText = ((idCell && idCell.textContent) || "").toLowerCase();
+    row.dataset.sev = sevText.indexOf("info") !== -1 ? "info" : "low";
+    var lastCell = row.lastElementChild;
+    if (lastCell) lastCell.appendChild(buildStatusGroup(id, row.dataset.status));
+  });
+
+  var allTrackedIds = Array.prototype.map.call(
+    document.querySelectorAll("[data-status-group]"),
+    function (g) { return g.dataset.id; }
+  );
+  var defaultStatusById = {};
+  Array.prototype.forEach.call(document.querySelectorAll("[data-status-group]"), function (g) {
+    defaultStatusById[g.dataset.id] = g.dataset.default;
+  });
+
+  function updateProgress() {
+    var resolved = allTrackedIds.filter(function (id) {
+      return (statusMap[id] || defaultStatusById[id]) === "resolved";
+    }).length;
+    var fill = document.getElementById("progress-fill");
+    var label = document.getElementById("progress-label");
+    var pct = allTrackedIds.length ? (resolved / allTrackedIds.length) * 100 : 0;
+    if (fill) fill.style.width = pct + "%";
+    if (label) label.innerHTML = "<b>" + resolved + "</b> of <b>" + allTrackedIds.length + "</b> findings marked resolved";
+  }
+  updateProgress();
+
+  // ---- Severity filter + free-text search ----
+  var currentSeverity = "all";
+  var searchInput = document.getElementById("finding-search");
+  var clearBtn = document.getElementById("clear-filter");
+  var clearBtn2 = document.getElementById("clear-filter-2");
+  var noResults = document.getElementById("no-results");
+  var sevBars = document.querySelectorAll("[data-filter-sev]");
+  var filterable = Array.prototype.slice.call(
+    document.querySelectorAll("article.finding[data-sev][id], .compact-row[data-sev]")
+  );
+  var findingSections = ["high-findings", "medium-findings", "low-findings"]
+    .map(function (id) { return document.getElementById(id); })
+    .filter(Boolean);
+
+  function applyFilters() {
+    var q = ((searchInput && searchInput.value) || "").trim().toLowerCase();
+    var visibleCount = 0;
+
+    filterable.forEach(function (el) {
+      var sevOk = currentSeverity === "all" || el.dataset.sev === currentSeverity;
+      var textOk = !q || el.textContent.toLowerCase().indexOf(q) !== -1;
+      var show = sevOk && textOk;
+      if (show) { el.removeAttribute("data-hidden"); visibleCount++; }
+      else { el.setAttribute("data-hidden", "true"); }
+    });
+
+    findingSections.forEach(function (section) {
+      var items = section.querySelectorAll("article.finding[data-sev][id], .compact-row[data-sev]");
+      if (!items.length) return;
+      var anyVisible = Array.prototype.some.call(items, function (el) { return !el.hasAttribute("data-hidden"); });
+      if (anyVisible) section.removeAttribute("data-hidden");
+      else section.setAttribute("data-hidden", "true");
+    });
+
+    var filterActive = currentSeverity !== "all" || !!q;
+    if (clearBtn) clearBtn.hidden = !filterActive;
+    if (noResults) noResults.setAttribute("data-visible", String(visibleCount === 0 && filterActive));
+  }
+
+  function setSeverity(sev) {
+    currentSeverity = currentSeverity === sev ? "all" : sev;
+    Array.prototype.forEach.call(sevBars, function (btn) {
+      btn.setAttribute("aria-pressed", String(btn.dataset.filterSev === currentSeverity));
+    });
+    // Auto-expand detailed findings that match the active filter so results aren't hidden behind a collapsed card.
+    if (currentSeverity !== "all") {
+      detailedFindings.forEach(function (el) {
+        if (el.dataset.sev === currentSeverity) {
+          el.dataset.collapsed = "false";
+          var t = el.querySelector(".finding-toggle");
+          if (t) t.setAttribute("aria-expanded", "true");
+        }
+      });
+    }
+    applyFilters();
+  }
+
+  function clearAll() {
+    currentSeverity = "all";
+    if (searchInput) searchInput.value = "";
+    Array.prototype.forEach.call(sevBars, function (btn) { btn.setAttribute("aria-pressed", "false"); });
+    applyFilters();
+  }
+
+  Array.prototype.forEach.call(sevBars, function (btn) {
+    btn.addEventListener("click", function () { setSeverity(btn.dataset.filterSev); });
+  });
+  if (searchInput) searchInput.addEventListener("input", applyFilters);
+  if (clearBtn) clearBtn.addEventListener("click", clearAll);
+  if (clearBtn2) clearBtn2.addEventListener("click", clearAll);
+
+  // Jumping in from the compliance matrix or cross-reference table should reveal the target finding.
+  Array.prototype.forEach.call(document.querySelectorAll('a[href^="#h"], a[href^="#m"], a[href^="#l"]'), function (a) {
+    a.addEventListener("click", function () {
+      var id = a.getAttribute("href").slice(1);
+      var target = document.getElementById(id);
+      if (target && target.classList.contains("finding")) {
+        target.dataset.collapsed = "false";
+        var t = target.querySelector(".finding-toggle");
+        if (t) t.setAttribute("aria-expanded", "true");
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
