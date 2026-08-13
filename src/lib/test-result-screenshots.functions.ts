@@ -3,7 +3,8 @@
 // is CR-scoped by the time a file reaches here (a specific CR row on Test
 // Case Upload, or a specific Test Case row on Test Case Review), so the
 // CR is always known from context — filenames only need TC<i>(<j>).<ext>,
-// e.g. TC1(1).jpg, with <j> optional (auto-assigned if omitted).
+// e.g. TC1(1).jpg or TC1 (1).jpg (a space before the parens is fine
+// either way), with <j> optional (auto-assigned if omitted).
 //
 // New binary-file transport for this codebase: uploadScreenshot takes a
 // FormData payload (one file per call) rather than the JSON-row pattern
@@ -66,7 +67,7 @@ const EXT_TO_MIME: Record<string, string> = {
 // from the old <CRNumber>TC<i>(<j>) convention, or nothing at all) is
 // ignored rather than validated — only anchored at the end so trailing
 // junk after the extension can't sneak in.
-const BULK_FILENAME_RE = /TC(\d+)(?:\((\d+)\))?\.([A-Za-z0-9]+)$/i;
+const BULK_FILENAME_RE = /TC(\d+)(?:\s*\((\d+)\))?\.([A-Za-z0-9]+)$/i;
 
 // Test-Case-wise mode: CR + Test Case are already known from route
 // context. An explicit sequence may be given as TC<i>(<j>) or bare (<j>);
