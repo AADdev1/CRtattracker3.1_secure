@@ -50,7 +50,14 @@ function TestResultScreenshotsPage() {
   }, [blocked, navigate]);
 
   const crNumber = search.crNumber ?? null;
-  const testCaseIds = search.testCaseIds ?? [];
+  // No implicit "All" default: an empty array means the Tester hasn't
+  // picked anything yet, and nothing renders until they explicitly choose
+  // "All" (stored as [ALL_SENTINEL]) or specific Test Cases — not on CR
+  // selection alone.
+  const rawTestCaseIds = search.testCaseIds ?? [];
+  const isAllSelected = rawTestCaseIds.includes(ALL_SENTINEL);
+  const specificTestCaseIds = rawTestCaseIds.filter((v) => v !== ALL_SENTINEL);
+  const hasTcSelection = isAllSelected || specificTestCaseIds.length > 0;
 
   const crsQuery = useQuery({
     queryKey: ["test-result-crs"],
@@ -65,9 +72,12 @@ function TestResultScreenshotsPage() {
   });
 
   const screenshotsQuery = useQuery({
-    queryKey: ["test-result-screenshots", crNumber, testCaseIds],
-    queryFn: () => getScreenshotsForCr({ data: { crNumber: crNumber!, testCaseIds } }),
-    enabled: !blocked && !!crNumber,
+    queryKey: ["test-result-screenshots", crNumber, isAllSelected, specificTestCaseIds],
+    queryFn: () =>
+      getScreenshotsForCr({
+        data: { crNumber: crNumber!, testCaseIds: isAllSelected ? undefined : specificTestCaseIds },
+      }),
+    enabled: !blocked && !!crNumber && hasTcSelection,
   });
 
   const groups = screenshotsQuery.data ?? [];
@@ -111,13 +121,17 @@ function TestResultScreenshotsPage() {
     .sort((a, b) => naturalCompareTestCaseNumber(a.test_case_number, b.test_case_number))
     .map((t) => ({ v: t.id, l: `TC${t.test_case_number} — ${t.test_case_name}` }));
 
-  const virtualTcValues = testCaseIds.length === 0 ? [ALL_SENTINEL] : testCaseIds;
-
   function handleTcChange(newValues: string[]) {
     const clickedAllNow = newValues.includes(ALL_SENTINEL);
-    const clickedAllBefore = virtualTcValues.includes(ALL_SENTINEL);
+    const clickedAllBefore = isAllSelected;
+    // Clicking "All" while it wasn't already active resets to exactly
+    // [ALL_SENTINEL], discarding any specific picks — otherwise strip the
+    // sentinel and keep whatever specific ids remain (which may become
+    // empty, correctly reverting to the unselected/no-results state).
     const real =
-      clickedAllNow && !clickedAllBefore ? [] : newValues.filter((v) => v !== ALL_SENTINEL);
+      clickedAllNow && !clickedAllBefore
+        ? [ALL_SENTINEL]
+        : newValues.filter((v) => v !== ALL_SENTINEL);
     navigate({
       to: "/test-result-screenshots",
       search: { crNumber: crNumber!, testCaseIds: real.length > 0 ? real : undefined },
@@ -157,10 +171,10 @@ function TestResultScreenshotsPage() {
             {crNumber && (
               <MultiSelectFilter
                 label="Test Case"
-                values={virtualTcValues}
+                values={rawTestCaseIds}
                 onChange={handleTcChange}
                 options={[{ v: ALL_SENTINEL, l: "All" }, ...testCaseOptions]}
-                placeholder="All"
+                placeholder="Select Test Case(s)…"
                 triggerClassName="w-64"
               />
             )}
@@ -175,13 +189,21 @@ function TestResultScreenshotsPage() {
           </Card>
         )}
 
-        {crNumber && screenshotsQuery.isLoading && (
+        {crNumber && !hasTcSelection && (
+          <Card>
+            <CardContent className="p-12 text-center text-muted-foreground">
+              Select "All" or specific Test Cases to view screenshots.
+            </CardContent>
+          </Card>
+        )}
+
+        {crNumber && hasTcSelection && screenshotsQuery.isLoading && (
           <Card>
             <CardContent className="p-12 text-center text-muted-foreground">Loading…</CardContent>
           </Card>
         )}
 
-        {crNumber && !screenshotsQuery.isLoading && groups.length === 0 && (
+        {crNumber && hasTcSelection && !screenshotsQuery.isLoading && groups.length === 0 && (
           <Card>
             <CardContent className="p-12 text-center text-muted-foreground">
               No test result screenshots for {crNumber} yet.
