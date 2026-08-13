@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MultiSelectFilter } from "@/components/multi-select-filter";
-import { ImageIcon } from "lucide-react";
+import { ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAppUser } from "@/lib/app-user";
 import { FEATURES } from "@/lib/release-config";
 import { getTestCases } from "@/lib/test-cases.functions";
@@ -39,8 +39,7 @@ function TestResultScreenshotsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const { isAdmin, role, isLoading: userLoading } = useAppUser();
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const [lightboxLabel, setLightboxLabel] = useState<string>("");
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   // No role and not Admin = no legitimate use for this screen — matches
   // the server-side assertHasRoleOrAdmin() gate on getScreenshotsForCr.
@@ -71,6 +70,39 @@ function TestResultScreenshotsPage() {
     enabled: !blocked && !!crNumber,
   });
 
+  const groups = screenshotsQuery.data ?? [];
+
+  // Flattened in the same order the groups render (numeric TC order, then
+  // numeric sequence within each) so the lightbox can step through every
+  // visible screenshot on the page, not just the ones in the group it was
+  // opened from. Only screenshots with a live signed URL are navigable —
+  // matches the thumbnails themselves being disabled when url is null.
+  const flatShots = groups.flatMap((g) =>
+    g.screenshots
+      .filter((s) => s.url)
+      .map((s) => ({
+        id: s.id,
+        url: s.url as string,
+        testCaseNumber: g.testCaseNumber,
+        sequence: s.sequence,
+      })),
+  );
+  const current = lightboxIndex !== null ? flatShots[lightboxIndex] : null;
+  const goPrev = () => setLightboxIndex((i) => (i !== null && i > 0 ? i - 1 : i));
+  const goNext = () =>
+    setLightboxIndex((i) => (i !== null && i < flatShots.length - 1 ? i + 1 : i));
+
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "ArrowLeft") goPrev();
+      else if (e.key === "ArrowRight") goNext();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lightboxIndex, flatShots.length]);
+
   if (userLoading || blocked) return null;
 
   const crs = crsQuery.data ?? [];
@@ -91,8 +123,6 @@ function TestResultScreenshotsPage() {
       search: { crNumber: crNumber!, testCaseIds: real.length > 0 ? real : undefined },
     });
   }
-
-  const groups = screenshotsQuery.data ?? [];
 
   return (
     <AppShell>
@@ -177,8 +207,8 @@ function TestResultScreenshotsPage() {
                   type="button"
                   className="group relative size-28 rounded-md border overflow-hidden bg-muted"
                   onClick={() => {
-                    setLightboxUrl(s.url);
-                    setLightboxLabel(`TC${g.testCaseNumber} — Result ${s.sequence}`);
+                    const idx = flatShots.findIndex((x) => x.id === s.id);
+                    if (idx !== -1) setLightboxIndex(idx);
                   }}
                   disabled={!s.url}
                 >
@@ -204,13 +234,46 @@ function TestResultScreenshotsPage() {
         ))}
       </PageBody>
 
-      <Dialog open={!!lightboxUrl} onOpenChange={(o) => !o && setLightboxUrl(null)}>
+      <Dialog open={lightboxIndex !== null} onOpenChange={(o) => !o && setLightboxIndex(null)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{lightboxLabel}</DialogTitle>
+            <DialogTitle>
+              {current ? `TC${current.testCaseNumber} — Result ${current.sequence}` : ""}
+            </DialogTitle>
           </DialogHeader>
-          {lightboxUrl && (
-            <img src={lightboxUrl} alt={lightboxLabel} className="w-full h-auto rounded-md" />
+          {current && (
+            <div className="relative">
+              <img
+                src={current.url}
+                alt={`TC${current.testCaseNumber} — Result ${current.sequence}`}
+                className="w-full h-auto rounded-md"
+              />
+              {lightboxIndex !== null && lightboxIndex > 0 && (
+                <button
+                  type="button"
+                  onClick={goPrev}
+                  aria-label="Previous screenshot"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 text-white p-2 hover:bg-black/80"
+                >
+                  <ChevronLeft className="size-5" />
+                </button>
+              )}
+              {lightboxIndex !== null && lightboxIndex < flatShots.length - 1 && (
+                <button
+                  type="button"
+                  onClick={goNext}
+                  aria-label="Next screenshot"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 text-white p-2 hover:bg-black/80"
+                >
+                  <ChevronRight className="size-5" />
+                </button>
+              )}
+            </div>
+          )}
+          {lightboxIndex !== null && (
+            <div className="text-center text-xs text-muted-foreground">
+              {lightboxIndex + 1} of {flatShots.length}
+            </div>
           )}
         </DialogContent>
       </Dialog>
