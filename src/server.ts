@@ -51,7 +51,11 @@ function securityHeaders(): Record<string, string> {
       // below stay fully restrictive; this is the one necessary loosening.
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data:",
+      // Storage origin added for test result screenshots — signed URLs
+      // served from this project's own Supabase Storage bucket
+      // (test-result-screenshots), the first feature that ever needed to
+      // render an image from outside the app's own origin.
+      `img-src 'self' data: ${SUPABASE_ORIGIN}`,
       "font-src 'self' data:",
       `connect-src 'self' ${SUPABASE_ORIGIN} ${wsOrigin}`,
       "frame-ancestors 'none'",
