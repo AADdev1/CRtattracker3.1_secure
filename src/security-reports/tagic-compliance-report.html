@@ -256,7 +256,59 @@
   <section id="summary">
     <h2>Executive Summary</h2>
     <p class="lede">This assessment evaluated roughly 100 discrete controls drawn from Sections 3.1–3.13 (Hardening Parameters), Section 4 (API Security Best Practices), and Section 5 (Web Service Best Practices) of the guideline. The codebase carries forward a materially strong security baseline — RLS is locked to <code>service_role</code> only, authorization is centralized through a single server-side gate, no SQL-injection or exploitable XSS surface was found, and CSP/HSTS/frame headers are already applied on every response. The team's own internal VAPT pass (July 2026) had already closed 13 of 19 prior findings. This assessment found <b>28 net-new or still-open gaps against the TATA AIG guideline specifically</b> — most are policy/hardening items (session timeout duration, MFA, audit logging, CI/CD) rather than exploitable bugs. One genuine new access-control defect was identified (H1).</p>
+  </section>
 
+  <section id="matrix">
+    <h2>Compliance Matrix <span class="count">by TAGIC-IR-GL-001 section</span></h2>
+    <p class="lede">Status per guideline clause group. "Partial" means most bullets in that clause are met but at least one open finding remains against it — see the linked finding IDs.</p>
+
+    <div class="matrix-group">
+      <h4>§3 Hardening Parameters</h4>
+      <table class="index">
+        <tr><th>§</th><th>Clause</th><th>Status at Scanning</th><th>Current Status</th><th>Related findings</th></tr>
+        <tr><td class="mono">3.1</td><td>Input Validation</td><td><span class="chip medium">Partial</span></td><td><span class="chip secure">Compliant</span></td><td><a href="#h1">H1</a>, <a href="#m4">M4</a>, <a href="#l5">L5</a>, <a href="#l6">L6</a></td></tr>
+        <tr><td class="mono">3.2</td><td>Output Encoding</td><td><span class="chip secure">Compliant</span></td><td><span class="chip secure">Compliant</span></td><td>—</td></tr>
+        <tr><td class="mono">3.3</td><td>Authentication &amp; Password Management</td><td><span class="chip medium">Partial</span></td><td><span class="chip accepted">Accepted risk</span></td><td><a href="#h3">H3</a>, <a href="#m8">M8</a>, <a href="#m9">M9</a>, <a href="#l2">L2</a>, <a href="#l3">L3</a>, <a href="#l11">L11</a></td></tr>
+        <tr><td class="mono">3.4</td><td>Session Management</td><td><span class="chip medium">Partial</span></td><td><span class="chip accepted">Accepted risk</span></td><td><a href="#h2">H2</a>, <a href="#m9">M9</a>, <a href="#m10">M10</a></td></tr>
+        <tr><td class="mono">3.5</td><td>Access Control</td><td><span class="chip medium">Partial</span></td><td><span class="chip medium">Partial</span></td><td><a href="#h1">H1</a>, <a href="#m1">M1</a>, <a href="#m2">M2</a>, <a href="#m11">M11</a>, <a href="#l7">L7</a></td></tr>
+        <tr><td class="mono">3.6</td><td>Miscellaneous (15-min idle timeout, lockout, CAPTCHA, forced change)</td><td><span class="chip high">Partial</span></td><td><span class="chip accepted">Accepted risk</span></td><td><a href="#h2">H2</a>, <a href="#m8">M8</a>, <a href="#l1">L1</a></td></tr>
+        <tr><td class="mono">3.7</td><td>Error Handling &amp; Logging</td><td><span class="chip medium">Partial</span></td><td><span class="chip secure">Compliant</span></td><td><a href="#m3">M3</a></td></tr>
+        <tr><td class="mono">3.8</td><td>Data Protection</td><td><span class="chip medium">Partial</span></td><td><span class="chip secure">Compliant</span></td><td><a href="#m6">M6</a>, <a href="#l10">L10</a></td></tr>
+        <tr><td class="mono">3.9</td><td>Communication Security</td><td><span class="chip secure">Compliant</span></td><td><span class="chip secure">Compliant</span></td><td>—</td></tr>
+        <tr><td class="mono">3.10</td><td>System Configuration</td><td><span class="chip medium">Partial</span></td><td><span class="chip medium">Partial</span></td><td><a href="#m7">M7</a>, <a href="#l8">L8</a>, <a href="#l12">L12</a>, <a href="#l14">L14</a></td></tr>
+        <tr><td class="mono">3.11</td><td>Database Security</td><td><span class="chip secure">Compliant</span></td><td><span class="chip secure">Compliant</span></td><td>(H1 is a mass-assignment/app-logic gap, not an RLS/DB-privilege gap)</td></tr>
+        <tr><td class="mono">3.12</td><td>File Management</td><td><span class="chip medium">Partial</span></td><td><span class="chip medium">Partial</span></td><td><a href="#m5">M5</a>, <a href="#l4">L4</a>, <a href="#l13">L13</a></td></tr>
+        <tr><td class="mono">3.13</td><td>Memory Management</td><td><span class="chip info">N/A</span></td><td><span class="chip info">N/A</span></td><td>Managed JS/V8 runtime — no native buffer/memory surface. No <code>eval</code>/<code>new Function</code> found.</td></tr>
+      </table>
+      <p class="sev-hint">Current Status reflects remediation work completed 2026-08-06 through 2026-08-14. "Accepted risk" means every related finding is now dispositioned but at least one via a documented decision not to fix, not a code change — see the linked finding's status note. "Partial" in this column means a related finding is still genuinely open or only partially fixed, not merely awaiting formal sign-off.</p>
+    </div>
+
+    <div class="matrix-group">
+      <h4>§4 API Security Best Practices</h4>
+      <table class="index">
+        <tr><th>§</th><th>Clause</th><th>Status at Scanning</th><th>Current Status</th><th>Related findings</th></tr>
+        <tr><td class="mono">4.1</td><td>Authentication</td><td><span class="chip medium">Partial</span></td><td><span class="chip medium">Partial</span></td><td><a href="#h3">H3</a>, <a href="#m2">M2</a></td></tr>
+        <tr><td class="mono">4.2</td><td>JWT</td><td><span class="chip secure">Compliant</span></td><td><span class="chip secure">Compliant</span></td><td>Algorithm verified server-side via <code>getClaims()</code>; TTL/secret strength is Supabase-managed — <a href="#l11">L11</a></td></tr>
+        <tr><td class="mono">4.3</td><td>OAuth</td><td><span class="chip info">N/A</span></td><td><span class="chip info">N/A</span></td><td>No OAuth/social-login flow implemented</td></tr>
+        <tr><td class="mono">4.4</td><td>Access (throttling, HTTPS, HSTS)</td><td><span class="chip medium">Partial</span></td><td><span class="chip medium">Partial</span></td><td><a href="#m2">M2</a></td></tr>
+        <tr><td class="mono">4.5</td><td>Input</td><td><span class="chip medium">Partial</span></td><td><span class="chip secure">Compliant</span></td><td><a href="#m4">M4</a>, <a href="#m5">M5</a></td></tr>
+        <tr><td class="mono">4.6</td><td>Processing (auth-gating, UUIDs, XXE, DEBUG off)</td><td><span class="chip medium">Partial</span></td><td><span class="chip secure">Compliant</span></td><td><a href="#h1">H1</a>, <a href="#l12">L12</a></td></tr>
+        <tr><td class="mono">4.7</td><td>Output (security headers, status codes)</td><td><span class="chip secure">Compliant</span></td><td><span class="chip secure">Compliant</span></td><td>CSP/HSTS/X-Frame-Options/nosniff all present in <code>server.ts</code></td></tr>
+        <tr><td class="mono">4.8</td><td>CI &amp; CD</td><td><span class="chip low">Non-compliant</span></td><td><span class="chip medium">Partial</span></td><td><a href="#l9">L9</a></td></tr>
+      </table>
+      <p class="sev-hint">Current Status reflects remediation work completed 2026-08-06 through 2026-08-14. §4.1/§4.4 stay Partial because M2's general rate limiter is still deferred, not just awaiting sign-off; §4.8 moves from Non-compliant to Partial because CI now exists (typecheck+build required) but tests/SCA/dependency-scanning/rollback-plan remain open.</p>
+    </div>
+
+    <div class="matrix-group">
+      <h4>§5 Web Service Best Practices (SOAP &amp; REST)</h4>
+      <table class="index">
+        <tr><th>§</th><th>Clause</th><th>Status</th><th>Notes</th></tr>
+        <tr><td class="mono">5.1–5.9</td><td>SOAP/WSDL-specific controls</td><td><span class="chip info">N/A</span></td><td>Architecture uses TanStack Start server-function RPCs over Supabase's internally-mediated REST layer, not a hand-rolled SOAP/WSDL or directly-exposed REST API — most SOAP-specific clauses (WSDL endpoint validation, WS-Security headers, SOAP <code>&lt;Fault&gt;</code> handling) don't map onto this architecture. Equivalent REST-shaped controls (input validation, auth, sensitive-data-in-transit, exception handling, auditing) are covered under §3–§4 above.</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="findings-overview">
     <div class="stats">
       <div class="stat compliant"><b>~72</b><span>Controls compliant</span></div>
       <div class="stat high"><b>3</b><span>High findings</span></div>
@@ -316,54 +368,6 @@
     <p style="margin:0 0 10px;">No findings match the current filter/search.</p>
     <button type="button" class="clear-filter" id="clear-filter-2">Clear filter</button>
   </div>
-
-  <section id="matrix">
-    <h2>Compliance Matrix <span class="count">by TAGIC-IR-GL-001 section</span></h2>
-    <p class="lede">Status per guideline clause group. "Partial" means most bullets in that clause are met but at least one open finding remains against it — see the linked finding IDs.</p>
-
-    <div class="matrix-group">
-      <h4>§3 Hardening Parameters</h4>
-      <table class="index">
-        <tr><th>§</th><th>Clause</th><th>Status</th><th>Related findings</th></tr>
-        <tr><td class="mono">3.1</td><td>Input Validation</td><td><span class="chip medium">Partial</span></td><td><a href="#h1">H1</a>, <a href="#m4">M4</a>, <a href="#l5">L5</a>, <a href="#l6">L6</a></td></tr>
-        <tr><td class="mono">3.2</td><td>Output Encoding</td><td><span class="chip secure">Compliant</span></td><td>—</td></tr>
-        <tr><td class="mono">3.3</td><td>Authentication &amp; Password Management</td><td><span class="chip medium">Partial</span></td><td><a href="#h3">H3</a>, <a href="#m8">M8</a>, <a href="#m9">M9</a>, <a href="#l2">L2</a>, <a href="#l3">L3</a>, <a href="#l11">L11</a></td></tr>
-        <tr><td class="mono">3.4</td><td>Session Management</td><td><span class="chip medium">Partial</span></td><td><a href="#h2">H2</a>, <a href="#m9">M9</a>, <a href="#m10">M10</a></td></tr>
-        <tr><td class="mono">3.5</td><td>Access Control</td><td><span class="chip medium">Partial</span></td><td><a href="#h1">H1</a>, <a href="#m1">M1</a>, <a href="#m2">M2</a>, <a href="#m11">M11</a>, <a href="#l7">L7</a></td></tr>
-        <tr><td class="mono">3.6</td><td>Miscellaneous (15-min idle timeout, lockout, CAPTCHA, forced change)</td><td><span class="chip high">Partial</span></td><td><a href="#h2">H2</a>, <a href="#m8">M8</a>, <a href="#l1">L1</a></td></tr>
-        <tr><td class="mono">3.7</td><td>Error Handling &amp; Logging</td><td><span class="chip medium">Partial</span></td><td><a href="#m3">M3</a></td></tr>
-        <tr><td class="mono">3.8</td><td>Data Protection</td><td><span class="chip medium">Partial</span></td><td><a href="#m6">M6</a>, <a href="#l10">L10</a></td></tr>
-        <tr><td class="mono">3.9</td><td>Communication Security</td><td><span class="chip secure">Compliant</span></td><td>—</td></tr>
-        <tr><td class="mono">3.10</td><td>System Configuration</td><td><span class="chip medium">Partial</span></td><td><a href="#m7">M7</a>, <a href="#l8">L8</a>, <a href="#l12">L12</a>, <a href="#l14">L14</a></td></tr>
-        <tr><td class="mono">3.11</td><td>Database Security</td><td><span class="chip secure">Compliant</span></td><td>(H1 is a mass-assignment/app-logic gap, not an RLS/DB-privilege gap)</td></tr>
-        <tr><td class="mono">3.12</td><td>File Management</td><td><span class="chip medium">Partial</span></td><td><a href="#m5">M5</a>, <a href="#l4">L4</a>, <a href="#l13">L13</a></td></tr>
-        <tr><td class="mono">3.13</td><td>Memory Management</td><td><span class="chip info">N/A</span></td><td>Managed JS/V8 runtime — no native buffer/memory surface. No <code>eval</code>/<code>new Function</code> found.</td></tr>
-      </table>
-    </div>
-
-    <div class="matrix-group">
-      <h4>§4 API Security Best Practices</h4>
-      <table class="index">
-        <tr><th>§</th><th>Clause</th><th>Status</th><th>Related findings</th></tr>
-        <tr><td class="mono">4.1</td><td>Authentication</td><td><span class="chip medium">Partial</span></td><td><a href="#h3">H3</a>, <a href="#m2">M2</a></td></tr>
-        <tr><td class="mono">4.2</td><td>JWT</td><td><span class="chip secure">Compliant</span></td><td>Algorithm verified server-side via <code>getClaims()</code>; TTL/secret strength is Supabase-managed — <a href="#l11">L11</a></td></tr>
-        <tr><td class="mono">4.3</td><td>OAuth</td><td><span class="chip info">N/A</span></td><td>No OAuth/social-login flow implemented</td></tr>
-        <tr><td class="mono">4.4</td><td>Access (throttling, HTTPS, HSTS)</td><td><span class="chip medium">Partial</span></td><td><a href="#m2">M2</a></td></tr>
-        <tr><td class="mono">4.5</td><td>Input</td><td><span class="chip medium">Partial</span></td><td><a href="#m4">M4</a>, <a href="#m5">M5</a></td></tr>
-        <tr><td class="mono">4.6</td><td>Processing (auth-gating, UUIDs, XXE, DEBUG off)</td><td><span class="chip medium">Partial</span></td><td><a href="#h1">H1</a>, <a href="#l12">L12</a></td></tr>
-        <tr><td class="mono">4.7</td><td>Output (security headers, status codes)</td><td><span class="chip secure">Compliant</span></td><td>CSP/HSTS/X-Frame-Options/nosniff all present in <code>server.ts</code></td></tr>
-        <tr><td class="mono">4.8</td><td>CI &amp; CD</td><td><span class="chip low">Non-compliant</span></td><td><a href="#l9">L9</a></td></tr>
-      </table>
-    </div>
-
-    <div class="matrix-group">
-      <h4>§5 Web Service Best Practices (SOAP &amp; REST)</h4>
-      <table class="index">
-        <tr><th>§</th><th>Clause</th><th>Status</th><th>Notes</th></tr>
-        <tr><td class="mono">5.1–5.9</td><td>SOAP/WSDL-specific controls</td><td><span class="chip info">N/A</span></td><td>Architecture uses TanStack Start server-function RPCs over Supabase's internally-mediated REST layer, not a hand-rolled SOAP/WSDL or directly-exposed REST API — most SOAP-specific clauses (WSDL endpoint validation, WS-Security headers, SOAP <code>&lt;Fault&gt;</code> handling) don't map onto this architecture. Equivalent REST-shaped controls (input validation, auth, sensitive-data-in-transit, exception handling, auditing) are covered under §3–§4 above.</td></tr>
-      </table>
-    </div>
-  </section>
 
   <section id="high-findings">
     <h2>High Findings <span class="count">3</span></h2>
