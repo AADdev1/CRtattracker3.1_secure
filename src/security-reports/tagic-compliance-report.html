@@ -219,6 +219,7 @@
   .finding[data-hidden="true"], .compact-row[data-hidden="true"]{ display:none !important; }
   section[data-hidden="true"]{ display:none !important; }
 
+  .status-toolbar{ display:flex; justify-content:flex-end; margin:2px 0 10px; }
   .status-group{ display:inline-flex; gap:2px; background:var(--paper); border:1px solid var(--line); border-radius:100px; padding:2px; flex-shrink:0; }
   .status-group button{
     border:none; background:none; font-family:inherit; font-size:10px; font-weight:700; text-transform:uppercase;
@@ -746,7 +747,6 @@ export const assignCrField = createServerFn({ method: "POST" })
     var id = el.id;
     var head = el.querySelector(".finding-head");
     var h3 = head.querySelector("h3");
-    var chipRow = head.querySelector(".chip-row");
 
     var toggle = document.createElement("button");
     toggle.type = "button";
@@ -756,8 +756,6 @@ export const assignCrField = createServerFn({ method: "POST" })
     head.insertBefore(toggle, h3);
     toggle.appendChild(h3);
 
-    if (chipRow) chipRow.appendChild(buildStatusGroup(id, el.dataset.status));
-
     var body = document.createElement("div");
     body.className = "finding-body";
     var node = head.nextSibling;
@@ -765,6 +763,17 @@ export const assignCrField = createServerFn({ method: "POST" })
     while (node) { toMove.push(node); node = node.nextSibling; }
     toMove.forEach(function (n) { body.appendChild(n); });
     el.appendChild(body);
+
+    // The interactive Open/In progress/Resolved toggle lives on its own
+    // row, separate from the static severity/status chips in the header.
+    // Putting both in the same flex row wrapped unpredictably against
+    // the title (and visually duplicated the same status right next to
+    // itself). Inserted before .finding-body, not into it, so the toggle
+    // stays visible even when the finding is collapsed.
+    var statusToolbar = document.createElement("div");
+    statusToolbar.className = "status-toolbar";
+    statusToolbar.appendChild(buildStatusGroup(id, el.dataset.status));
+    el.insertBefore(statusToolbar, body);
 
     // High findings start expanded (most actionable); Medium starts collapsed to keep the page scannable.
     var collapsed = el.dataset.sev !== "high";
