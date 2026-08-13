@@ -46,7 +46,13 @@ import type { Database } from "@/integrations/supabase/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const BUCKET = "test-result-screenshots";
-const SIGNED_URL_TTL_SECONDS = 300;
+// Generous on purpose: this is a viewing session TTL, not a security
+// boundary — a short TTL (e.g. 5 min) breaks every thumbnail on the page
+// the moment a viewer leaves the tab open, or if the SSR response sits in
+// an edge cache for a bit before reaching the browser (this app deploys
+// to Cloudflare). 1 hour comfortably covers a real browsing session while
+// still expiring, unlike a public bucket URL.
+const SIGNED_URL_TTL_SECONDS = 3600;
 const MAX_AUTO_SEQUENCE_ATTEMPTS = 5;
 
 const EXT_TO_MIME: Record<string, string> = {
