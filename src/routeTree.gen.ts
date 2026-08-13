@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorklistRouteImport } from './routes/worklist'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as UploadRouteImport } from './routes/upload'
+import { Route as TestResultScreenshotsRouteImport } from './routes/test-result-screenshots'
 import { Route as TestCaseUploadRouteImport } from './routes/test-case-upload'
 import { Route as TestCaseApprovalRouteImport } from './routes/test-case-approval'
 import { Route as TatLogicRouteImport } from './routes/tat-logic'
@@ -43,6 +44,11 @@ const UsersRoute = UsersRouteImport.update({
 const UploadRoute = UploadRouteImport.update({
   id: '/upload',
   path: '/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TestResultScreenshotsRoute = TestResultScreenshotsRouteImport.update({
+  id: '/test-result-screenshots',
+  path: '/test-result-screenshots',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TestCaseUploadRoute = TestCaseUploadRouteImport.update({
@@ -147,6 +153,7 @@ export interface FileRoutesByFullPath {
   '/tat-logic': typeof TatLogicRoute
   '/test-case-approval': typeof TestCaseApprovalRoute
   '/test-case-upload': typeof TestCaseUploadRoute
+  '/test-result-screenshots': typeof TestResultScreenshotsRoute
   '/upload': typeof UploadRoute
   '/users': typeof UsersRoute
   '/worklist': typeof WorklistRoute
@@ -169,6 +176,7 @@ export interface FileRoutesByTo {
   '/tat-logic': typeof TatLogicRoute
   '/test-case-approval': typeof TestCaseApprovalRoute
   '/test-case-upload': typeof TestCaseUploadRoute
+  '/test-result-screenshots': typeof TestResultScreenshotsRoute
   '/upload': typeof UploadRoute
   '/users': typeof UsersRoute
   '/worklist': typeof WorklistRoute
@@ -192,6 +200,7 @@ export interface FileRoutesById {
   '/tat-logic': typeof TatLogicRoute
   '/test-case-approval': typeof TestCaseApprovalRoute
   '/test-case-upload': typeof TestCaseUploadRoute
+  '/test-result-screenshots': typeof TestResultScreenshotsRoute
   '/upload': typeof UploadRoute
   '/users': typeof UsersRoute
   '/worklist': typeof WorklistRoute
@@ -216,6 +225,7 @@ export interface FileRouteTypes {
     | '/tat-logic'
     | '/test-case-approval'
     | '/test-case-upload'
+    | '/test-result-screenshots'
     | '/upload'
     | '/users'
     | '/worklist'
@@ -238,6 +248,7 @@ export interface FileRouteTypes {
     | '/tat-logic'
     | '/test-case-approval'
     | '/test-case-upload'
+    | '/test-result-screenshots'
     | '/upload'
     | '/users'
     | '/worklist'
@@ -260,6 +271,7 @@ export interface FileRouteTypes {
     | '/tat-logic'
     | '/test-case-approval'
     | '/test-case-upload'
+    | '/test-result-screenshots'
     | '/upload'
     | '/users'
     | '/worklist'
@@ -283,6 +295,7 @@ export interface RootRouteChildren {
   TatLogicRoute: typeof TatLogicRoute
   TestCaseApprovalRoute: typeof TestCaseApprovalRoute
   TestCaseUploadRoute: typeof TestCaseUploadRoute
+  TestResultScreenshotsRoute: typeof TestResultScreenshotsRoute
   UploadRoute: typeof UploadRoute
   UsersRoute: typeof UsersRoute
   WorklistRoute: typeof WorklistRoute
@@ -310,6 +323,13 @@ declare module '@tanstack/react-router' {
       path: '/upload'
       fullPath: '/upload'
       preLoaderRoute: typeof UploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/test-result-screenshots': {
+      id: '/test-result-screenshots'
+      path: '/test-result-screenshots'
+      fullPath: '/test-result-screenshots'
+      preLoaderRoute: typeof TestResultScreenshotsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/test-case-upload': {
@@ -460,6 +480,7 @@ const rootRouteChildren: RootRouteChildren = {
   TatLogicRoute: TatLogicRoute,
   TestCaseApprovalRoute: TestCaseApprovalRoute,
   TestCaseUploadRoute: TestCaseUploadRoute,
+  TestResultScreenshotsRoute: TestResultScreenshotsRoute,
   UploadRoute: UploadRoute,
   UsersRoute: UsersRoute,
   WorklistRoute: WorklistRoute,

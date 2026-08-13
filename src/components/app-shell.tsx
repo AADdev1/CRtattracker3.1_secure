@@ -6,6 +6,7 @@ import {
   Ruler,
   Settings2,
   ListChecks,
+  Images,
   Activity,
   Bug,
   Calculator,
@@ -87,6 +88,11 @@ const nav = [
     requiresApproverAccess: true,
     feature: "testing",
   },
+  // Everyone with a role or Admin can view — same tier as Dashboard, no
+  // extra requires* gate. Upload itself is restricted to Tester/Admin
+  // inside test-result-screenshots.functions.ts and on the CR detail /
+  // Test Case Review pages, not here.
+  { to: "/test-result-screenshots", label: "Test Results", icon: Images, feature: "testing" },
   {
     to: "/kpis",
     label: "KPI Configuration",

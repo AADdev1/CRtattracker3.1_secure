@@ -30,7 +30,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Download, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Download, AlertTriangle, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useAppUser } from "@/lib/app-user";
 import { FEATURES } from "@/lib/release-config";
@@ -43,6 +43,7 @@ import {
   updateExecutionStatus,
   downloadTestCasesExcel,
 } from "@/lib/test-cases.functions";
+import { uploadScreenshotForTestCase } from "@/lib/test-result-screenshots.functions";
 
 export const Route = createFileRoute("/test-case-review/$crNumber")({
   head: ({ params }) => ({ meta: [{ title: `${params.crNumber} Test Cases · Kpisavvy` }] }),
@@ -76,6 +77,24 @@ function TestCaseReviewPage() {
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [sendBackComment, setSendBackComment] = useState("");
   const [draftExecutionStatus, setDraftExecutionStatus] = useState<Record<string, string>>({});
+  const [uploadingTcId, setUploadingTcId] = useState<string | null>(null);
+  const canUploadScreenshots = isAdmin || role === "Tester";
+
+  async function handleTcScreenshotUpload(testCaseId: string, file: File | undefined) {
+    if (!file) return;
+    setUploadingTcId(testCaseId);
+    try {
+      const result = await uploadScreenshotForTestCase(crNumber, testCaseId, file);
+      if (result.ok) {
+        toast.success(`Uploaded ${result.file}.`);
+        qc.invalidateQueries({ queryKey: ["test-result-screenshots", crNumber] });
+      } else {
+        toast.error(result.message ?? "Upload failed");
+      }
+    } finally {
+      setUploadingTcId(null);
+    }
+  }
   // No role and not Admin = no legitimate use for this screen — matches
   // the server-side assertHasRoleOrAdmin() gate on getCrTestingHeader/
   // getTestCases. Also gated behind the testing release flag, matching
@@ -272,6 +291,7 @@ function TestCaseReviewPage() {
                   <TableHead className="w-64">Approver Comments</TableHead>
                   <TableHead className="w-40">Execution Status</TableHead>
                   <TableHead className="w-40">Defect ID</TableHead>
+                  <TableHead className="w-32">Screenshots</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -387,11 +407,41 @@ function TestCaseReviewPage() {
                         (r.defect_id ?? "—")
                       )}
                     </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to="/test-result-screenshots"
+                          search={{ crNumber, testCaseIds: [r.id] }}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          View
+                        </Link>
+                        {canUploadScreenshots && r.status === "Approved" && (
+                          <label className="cursor-pointer">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              disabled={uploadingTcId === r.id}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                e.target.value = "";
+                                void handleTcScreenshotUpload(r.id, file);
+                              }}
+                            />
+                            <span className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                              <Upload className="size-3" />
+                              {uploadingTcId === r.id ? "Uploading…" : "Upload"}
+                            </span>
+                          </label>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                       No test cases uploaded yet.
                     </TableCell>
                   </TableRow>

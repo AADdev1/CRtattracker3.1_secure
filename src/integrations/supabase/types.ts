@@ -802,6 +802,59 @@ export type Database = {
         }
         Relationships: []
       }
+      test_result_screenshots: {
+        Row: {
+          created_at: string
+          cr_number: string
+          file_extension: string
+          id: string
+          original_filename: string
+          sequence: number
+          storage_path: string
+          test_case_number_normalized: string
+          test_case_number_raw: string
+          updated_at: string
+          uploaded_by: string
+          uploaded_date: string
+        }
+        Insert: {
+          created_at?: string
+          cr_number: string
+          file_extension: string
+          id?: string
+          original_filename: string
+          sequence: number
+          storage_path: string
+          test_case_number_normalized: string
+          test_case_number_raw: string
+          updated_at?: string
+          uploaded_by: string
+          uploaded_date?: string
+        }
+        Update: {
+          created_at?: string
+          cr_number?: string
+          file_extension?: string
+          id?: string
+          original_filename?: string
+          sequence?: number
+          storage_path?: string
+          test_case_number_normalized?: string
+          test_case_number_raw?: string
+          updated_at?: string
+          uploaded_by?: string
+          uploaded_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_result_screenshots_cr_number_fkey"
+            columns: ["cr_number"]
+            isOneToOne: false
+            referencedRelation: "crs"
+            referencedColumns: ["cr_number"]
+          },
+        ]
+      }
       test_cases: {
         Row: {
           approval_date: string | null

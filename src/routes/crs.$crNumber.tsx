@@ -116,11 +116,18 @@ function CrDetails() {
         actions={
           <div className="flex gap-2">
             {FEATURES.testing && (
-              <Button asChild variant="outline">
-                <Link to="/test-case-review/$crNumber" params={{ crNumber: cr.cr_number }}>
-                  View Test Results
-                </Link>
-              </Button>
+              <>
+                <Button asChild variant="outline">
+                  <Link to="/test-case-review/$crNumber" params={{ crNumber: cr.cr_number }}>
+                    Review Test Cases
+                  </Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link to="/test-result-screenshots" search={{ crNumber: cr.cr_number }}>
+                    View Test Results
+                  </Link>
+                </Button>
+              </>
             )}
             <Button asChild variant="outline">
               <Link to="/crs">

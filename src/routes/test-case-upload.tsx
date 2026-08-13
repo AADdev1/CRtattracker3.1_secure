@@ -22,7 +22,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, AlertTriangle } from "lucide-react";
+import { Search, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAppUser } from "@/lib/app-user";
 import { FEATURES } from "@/lib/release-config";
@@ -31,6 +31,10 @@ import {
   submitTestCases,
   uploadTestCaseExcel,
 } from "@/lib/test-cases.functions";
+import {
+  uploadScreenshotBulk,
+  type ScreenshotUploadResult,
+} from "@/lib/test-result-screenshots.functions";
 
 export const Route = createFileRoute("/test-case-upload")({
   head: () => ({ meta: [{ title: "Test Case Upload · Kpisavvy" }] }),
@@ -73,6 +77,33 @@ function TestCaseUploadView() {
   const [uploadTarget, setUploadTarget] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [resultsTarget, setResultsTarget] = useState<string | null>(null);
+  const [resultsUploading, setResultsUploading] = useState(false);
+  const [resultsUploadResults, setResultsUploadResults] = useState<ScreenshotUploadResult[]>([]);
+
+  async function handleResultsUpload(files: FileList | null) {
+    if (!resultsTarget || !files || files.length === 0) return;
+    setResultsUploading(true);
+    setResultsUploadResults([]);
+    try {
+      const results = await uploadScreenshotBulk(resultsTarget, Array.from(files));
+      setResultsUploadResults(results);
+      const failCount = results.filter((r) => !r.ok).length;
+      if (failCount === 0) toast.success(`Uploaded ${results.length} screenshot(s).`);
+      else toast.error(`${failCount} of ${results.length} file(s) failed — see details below.`);
+      qc.invalidateQueries({ queryKey: ["test-result-screenshots", resultsTarget] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setResultsUploading(false);
+    }
+  }
+
+  function closeResultsDialog() {
+    if (resultsUploading) return;
+    setResultsTarget(null);
+    setResultsUploadResults([]);
+  }
 
   const crs = useQuery({
     queryKey: ["test-case-upload-crs"],
@@ -213,6 +244,24 @@ function TestCaseUploadView() {
                             View Status
                           </Link>
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={c.testCaseStatus !== "Approved"}
+                          title={
+                            c.testCaseStatus !== "Approved"
+                              ? "Test cases must be Approved before uploading result screenshots"
+                              : undefined
+                          }
+                          onClick={() => setResultsTarget(c.cr_number)}
+                        >
+                          Upload Test Results
+                        </Button>
+                        <Button size="sm" variant="ghost" asChild>
+                          <Link to="/test-result-screenshots" search={{ crNumber: c.cr_number }}>
+                            View Results
+                          </Link>
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );
@@ -258,6 +307,49 @@ function TestCaseUploadView() {
               }}
             >
               {upload.isPending ? "Uploading…" : "Upload"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={resultsTarget != null} onOpenChange={(o) => !o && closeResultsDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload test result screenshots — {resultsTarget}</DialogTitle>
+            <DialogDescription>
+              Select one or more screenshots named
+              &lt;CRNumber&gt;TC&lt;i&gt;(&lt;j&gt;).&lt;ext&gt;, e.g. {resultsTarget}TC1(1).jpg.
+              Each file is processed independently.
+            </DialogDescription>
+          </DialogHeader>
+          <input
+            type="file"
+            multiple
+            accept="image/*"
+            disabled={resultsUploading}
+            onChange={(e) => handleResultsUpload(e.target.files)}
+            className="text-sm"
+          />
+          {resultsUploadResults.length > 0 && (
+            <div className="max-h-64 overflow-y-auto border rounded-md divide-y text-sm">
+              {resultsUploadResults.map((r, i) => (
+                <div key={`${r.file}-${i}`} className="flex items-start gap-2 px-3 py-2">
+                  {r.ok ? (
+                    <CheckCircle2 className="size-4 text-[color:var(--kpi-green)] shrink-0 mt-0.5" />
+                  ) : (
+                    <XCircle className="size-4 text-destructive shrink-0 mt-0.5" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{r.file}</div>
+                    {!r.ok && <div className="text-muted-foreground text-xs">{r.message}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" disabled={resultsUploading} onClick={closeResultsDialog}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
