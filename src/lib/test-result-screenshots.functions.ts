@@ -1,6 +1,9 @@
 // Test Result Screenshot Management — Testers upload evidence screenshots
-// against Approved test cases; every role views. Filename convention:
-// <CRNumber>TC<i>(<j>).<ext>, e.g. 303TC1(1).jpg.
+// against Approved test cases; every role views. Every upload entry point
+// is CR-scoped by the time a file reaches here (a specific CR row on Test
+// Case Upload, or a specific Test Case row on Test Case Review), so the
+// CR is always known from context — filenames only need TC<i>(<j>).<ext>,
+// e.g. TC1(1).jpg, with <j> optional (auto-assigned if omitted).
 //
 // New binary-file transport for this codebase: uploadScreenshot takes a
 // FormData payload (one file per call) rather than the JSON-row pattern
@@ -54,13 +57,16 @@ const EXT_TO_MIME: Record<string, string> = {
   bmp: "image/bmp",
 };
 
-// Bulk mode: filename must FULLY match <CRNumber>TC<i>(<j>).<ext>. The CR
-// number is captured lazily up to the literal "TC" token so this works
-// whether cr_number is pure numeric ("303") or alphanumeric — the
-// captured text is compared verbatim (case-insensitively) against the CR
-// being bulk-uploaded into, never parsed further. Anchored so trailing
-// junk ("303TC1(1) copy.jpg") is rejected, not truncated.
-const BULK_FILENAME_RE = /^(.+?)TC(\d+)\((\d+)\)\.([A-Za-z0-9]+)$/i;
+// Bulk mode: every upload entry point in this app is CR-scoped by the
+// time a file reaches here (the Tester clicked "Upload Test Results" for
+// a specific CR row on the Test Case Upload page) — the CR is already
+// known from context, not derived from the filename. The filename only
+// needs to identify the Test Case (TC<i>) and, optionally, an explicit
+// result sequence ((<j>)); anything before "TC" (a leftover CR prefix
+// from the old <CRNumber>TC<i>(<j>) convention, or nothing at all) is
+// ignored rather than validated — only anchored at the end so trailing
+// junk after the extension can't sneak in.
+const BULK_FILENAME_RE = /TC(\d+)(?:\((\d+)\))?\.([A-Za-z0-9]+)$/i;
 
 // Test-Case-wise mode: CR + Test Case are already known from route
 // context. An explicit sequence may be given as TC<i>(<j>) or bare (<j>);
@@ -181,14 +187,9 @@ export const uploadScreenshot = createServerFn({ method: "POST" })
       // --- Bulk mode ---
       const m = file.name.match(BULK_FILENAME_RE);
       if (!m) {
-        throw new Error(
-          `"${file.name}" doesn't match the required pattern <CRNumber>TC<i>(<j>).<ext>`,
-        );
+        throw new Error(`"${file.name}" doesn't match the required pattern TC<i>(<j>).<ext>`);
       }
-      const [, crToken, tcIndex, seqStr] = m;
-      if (crToken.trim().toLowerCase() !== crNumber.trim().toLowerCase()) {
-        throw new Error(`"${file.name}" is for CR ${crToken}, not ${crNumber}`);
-      }
+      const [, tcIndex, seqStr] = m;
 
       const { data: testCases, error: tcListErr } = await supabaseAdmin
         .from("test_cases")
@@ -213,7 +214,7 @@ export const uploadScreenshot = createServerFn({ method: "POST" })
 
       tcRaw = matches[0].test_case_number;
       tcNormalized = normalizeDigits(tcRaw);
-      sequence = Number(seqStr);
+      sequence = seqStr ? Number(seqStr) : null;
     }
 
     const claimedExt = (file.name.split(".").pop() ?? "").toLowerCase();

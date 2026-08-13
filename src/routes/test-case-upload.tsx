@@ -317,9 +317,10 @@ function TestCaseUploadView() {
           <DialogHeader>
             <DialogTitle>Upload test result screenshots — {resultsTarget}</DialogTitle>
             <DialogDescription>
-              Select one or more screenshots named
-              &lt;CRNumber&gt;TC&lt;i&gt;(&lt;j&gt;).&lt;ext&gt;, e.g. {resultsTarget}TC1(1).jpg.
-              Each file is processed independently.
+              Select one or more screenshots named TC&lt;i&gt;(&lt;j&gt;).&lt;ext&gt;, e.g.
+              TC1(1).jpg — the CR is already known from the row you clicked. The sequence number is
+              optional; leave it off and the next one is assigned automatically. Each file is
+              processed independently.
             </DialogDescription>
           </DialogHeader>
           <input
