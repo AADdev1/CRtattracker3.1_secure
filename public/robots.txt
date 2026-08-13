@@ -1,0 +1,4 @@
+# Internal, authenticated line-of-business application — nothing here is
+# meant to be publicly discoverable or indexed.
+User-agent: *
+Disallow: /

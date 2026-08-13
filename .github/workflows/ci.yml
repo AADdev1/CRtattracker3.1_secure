@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      # Informational only — not a required gate. There is pre-existing
+      # lint debt unrelated to any single change (notably an
+      # automatically-generated file that regenerates and drifts again on
+      # its own), so failing the whole check on that would block unrelated
+      # PRs. Fix the lint debt, then flip this to a hard failure.
+      - name: Lint (non-blocking)
+        run: npm run lint
+        continue-on-error: true

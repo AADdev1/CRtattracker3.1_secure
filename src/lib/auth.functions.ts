@@ -90,6 +90,25 @@ export const signIn = createServerFn({ method: "POST" })
       .eq("email", email)
       .maybeSingle<AttemptRow>();
 
+    // L1 — capture the account's last sign-in time BEFORE this login
+    // overwrites it, so it reflects the *previous* session, not this one.
+    // Supabase updates auth.users.last_sign_in_at as part of processing
+    // signInWithPassword below, so this has to happen first or the value
+    // returned would just be "now." Best-effort: a lookup failure here
+    // must never block sign-in itself.
+    let previousLastSignInAt: string | null = null;
+    const { data: existingProfile } = await supabaseAdmin
+      .from("user_management")
+      .select("auth_user_id")
+      .eq("email", email)
+      .maybeSingle();
+    if (existingProfile?.auth_user_id) {
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(
+        existingProfile.auth_user_id,
+      );
+      previousLastSignInAt = authUser?.user?.last_sign_in_at ?? null;
+    }
+
     // Reject immediately, without ever contacting Supabase, if this email
     // is currently locked out from too many recent failures.
     if (attempt?.locked_until && new Date(attempt.locked_until) > new Date()) {
@@ -135,5 +154,6 @@ export const signIn = createServerFn({ method: "POST" })
     return {
       access_token: signInData.session.access_token,
       refresh_token: signInData.session.refresh_token,
+      previousLastSignInAt,
     };
   });

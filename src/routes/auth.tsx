@@ -32,11 +32,26 @@ function AuthPage() {
       // Supabase is ever contacted. The server hands back session tokens,
       // which setSession hydrates into the client SDK exactly as if
       // signInWithPassword had run locally.
-      const { access_token, refresh_token } = await signInFn({ data: { email, password } });
+      const { access_token, refresh_token, previousLastSignInAt } = await signInFn({
+        data: { email, password },
+      });
       const { error } = await supabase.auth.setSession({ access_token, refresh_token });
       if (error) {
         toast.error(error.message);
       } else {
+        // L1 — sessionStorage (not localStorage): shown for this browser
+        // session only, cleared when the tab/browser closes, same spirit
+        // as "notify the user of their last login" without accumulating a
+        // permanent client-side login history.
+        try {
+          if (previousLastSignInAt) {
+            sessionStorage.setItem("kpisavvy:previousLastSignInAt", previousLastSignInAt);
+          } else {
+            sessionStorage.removeItem("kpisavvy:previousLastSignInAt");
+          }
+        } catch {
+          // Private mode / disabled storage — just skip showing it.
+        }
         // CurrentUserProvider caches the signed-out state under this key.
         // Wait for it to refetch with the new session before navigating —
         // otherwise the stale cached "no session" briefly bounces us back

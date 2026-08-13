@@ -167,6 +167,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(
     () => typeof window !== "undefined" && localStorage.getItem("sidebar-collapsed") === "true",
   );
+  // L1 — set once per browser session by auth.tsx right after a successful
+  // sign-in (see signIn's previousLastSignInAt). sessionStorage, not
+  // localStorage: shown for this session only, not accumulated forever.
+  const [lastLogin] = useState(() =>
+    typeof window !== "undefined" ? sessionStorage.getItem("kpisavvy:previousLastSignInAt") : null,
+  );
   function toggleCollapsed() {
     setCollapsed((prev) => {
       const next = !prev;
@@ -199,6 +205,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <div className="text-base text-sidebar-foreground/60 truncate max-w-40">
                     {userName}
                     {isAdmin ? " · Admin" : ""}
+                  </div>
+                )}
+                {lastLogin && (
+                  <div className="text-xs text-sidebar-foreground/40 truncate max-w-40">
+                    Last login: {new Date(lastLogin).toLocaleString()}
                   </div>
                 )}
               </div>
