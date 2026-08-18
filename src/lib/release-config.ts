@@ -13,15 +13,15 @@ export const FEATURES = {
   // Release 2 — Testing Governance: Test Case Management, Test Case
   // Approval, Test Execution Tracking, Defect Re-testing, CR Testing
   // Progress.
-  testing: false,
+  testing: true,
   // Release 3 (part 1) — CR Planner, Planner Calendar.
-  planner: false,
+  planner: true,
   // Release 3 (part 2) — Deployment Planning, Deployment Status
   // Tracking, Production Deployment Workflow.
-  deployment: false,
+  deployment: true,
   // Release 4 — KPI Configuration, Defect Status Mapping, Security
   // Report, User Management.
-  administration: false,
+  administration: true,
 } as const;
 
 export type FeatureName = Exclude<keyof typeof FEATURES, "release1">;
