@@ -64,20 +64,14 @@ export const Route = createFileRoute("/cr-planner")({
 const PAGE_SIZE = 25;
 const DEV_RESOURCES = ["R1", "R2"] as const;
 
-// For plain `date` columns (dev_start_date, prod_date, deployment_master's
-// deployment_date) — these come back as bare "yyyy-MM-dd" with no time or
-// offset, so "T00:00:00" is appended to parse them as local midnight
-// instead of UTC midnight (avoids an off-by-one-day shift in negative-UTC
-// timezones).
+// For plain `date` columns — these come back as bare
+// "yyyy-MM-dd" with no time or offset, so "T00:00:00" is
+// appended to parse them as local midnight.
 function fmtDate(d: string | null): string {
   return d ? format(new Date(`${d}T00:00:00`), "dd-MMM-yyyy") : "—";
 }
 
-// For `timestamptz` columns (crs.date_created / date_modified) — these
-// already come back as a full ISO datetime with an offset (e.g.
-// "2026-07-17T18:04:00+00:00"), so appending anything breaks parsing.
-// Using fmtDate on these was the actual cause of the grid crashing a
-// couple seconds after load, once real row data arrived.
+// For `timestamptz` columns such as date_created / date_modified.
 function fmtTimestamp(d: string | null): string {
   return d ? format(new Date(d), "dd-MMM-yyyy") : "—";
 }
@@ -102,14 +96,18 @@ type SortKey =
   | "sitEffort"
   | "sitStartDate"
   | "uatDate"
+  | "uatSignOffDate"
+  | "finalCrObservationDate"
   | "prodDate";
 
 type PlannerGridRow = Awaited<ReturnType<typeof listPlannerGrid>>[number];
+
 const EMPTY_ROWS: PlannerGridRow[] = [];
 
 function CrPlannerPage() {
   const { role, isAdmin, isLoading } = useAppUser();
   const navigate = useNavigate();
+
   const canAccess = FEATURES.planner && (role === "ITPM" || isAdmin);
 
   useEffect(() => {
@@ -118,14 +116,14 @@ function CrPlannerPage() {
 
   if (isLoading || !canAccess) return null;
 
-  // Admin gets the app-wide "read-only everywhere" baseline — view the
-  // grid, no Add/edit controls. Writes stay ITPM-only server-side in
-  // assertPlannerActor regardless of what the UI shows.
+  // Admin is read-only.
+  // Writes remain ITPM-only server-side.
   return <CrPlannerView canEdit={role === "ITPM"} />;
 }
 
 function CrPlannerView({ canEdit }: { canEdit: boolean }) {
   const qc = useQueryClient();
+
   const listActiveFn = useServerFn(listActiveCrsForPlanner);
   const addToPlannerFn = useServerFn(addCrsToPlanner);
   const listGridFn = useServerFn(listPlannerGrid);
@@ -138,23 +136,20 @@ function CrPlannerView({ canEdit }: { canEdit: boolean }) {
   const [sortKey, setSortKey] = useState<SortKey>("dateModified");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  // Only needed for the Active CR Selection / Add To Planner flow, which
-  // is hidden entirely for Admin — no point firing an ITPM-only-gated
-  // request (assertPlannerActor) that would just 403.
+  // Active CR selection.
   const activeCrs = useQuery({
     queryKey: ["cr-planner-active-crs"],
     queryFn: () => listActiveFn(),
     enabled: canEdit,
   });
 
+  // Planner grid.
   const grid = useQuery({
     queryKey: ["cr-planner-grid"],
     queryFn: () => listGridFn(),
   });
 
-  // Read-only — mirrors the Deployment Planning module's Planned
-  // schedules, no add/write capability from this page. Only needed to
-  // populate the PROD Date dropdown, which Admin never sees.
+  // Planned deployment dates used by PROD Date.
   const plannedDates = useQuery({
     queryKey: ["cr-planner-planned-dates"],
     queryFn: () => listPlannedDatesFn(),
@@ -162,35 +157,59 @@ function CrPlannerView({ canEdit }: { canEdit: boolean }) {
   });
 
   const addToPlanner = useMutation({
-    mutationFn: (crNumbers: string[]) => addToPlannerFn({ data: { crNumbers } }),
+    mutationFn: (crNumbers: string[]) =>
+      addToPlannerFn({
+        data: { crNumbers },
+      }),
+
     onSuccess: (result) => {
-      if (result.added.length > 0)
+      if (result.added.length > 0) {
         toast.success(`Added ${result.added.length} CR(s) to the planner.`);
-      if (result.skipped.length > 0) {
-        toast.error(`Selected CR already exists in planner: ${result.skipped.join(", ")}`);
       }
+
+      if (result.skipped.length > 0) {
+        toast.error(
+          `Selected CR already exists in planner: ${result.skipped.join(", ")}`,
+        );
+      }
+
       setSelected(new Set());
-      qc.invalidateQueries({ queryKey: ["cr-planner-active-crs"] });
-      qc.invalidateQueries({ queryKey: ["cr-planner-grid"] });
+
+      qc.invalidateQueries({
+        queryKey: ["cr-planner-active-crs"],
+      });
+
+      qc.invalidateQueries({
+        queryKey: ["cr-planner-grid"],
+      });
     },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : String(e)),
+
+    onError: (e: unknown) =>
+      toast.error(e instanceof Error ? e.message : String(e)),
   });
 
   function toggleSelected(crNumber: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(crNumber)) next.delete(crNumber);
-      else next.add(crNumber);
+
+      if (next.has(crNumber)) {
+        next.delete(crNumber);
+      } else {
+        next.add(crNumber);
+      }
+
       return next;
     });
   }
 
   function toggleSort(key: SortKey) {
-    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
       setSortKey(key);
       setSortDir("desc");
     }
+
     setPage(1);
   }
 
@@ -198,103 +217,186 @@ function CrPlannerView({ canEdit }: { canEdit: boolean }) {
 
   const filtered = useMemo(() => {
     if (!q) return rows;
+
     const t = q.toLowerCase();
+
     return rows.filter(
-      (r) => r.crNumber.toLowerCase().includes(t) || (r.title ?? "").toLowerCase().includes(t),
+      (r) =>
+        r.crNumber.toLowerCase().includes(t) ||
+        (r.title ?? "").toLowerCase().includes(t),
     );
   }, [rows, q]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
+
     function value(r: PlannerGridRow): string | number | null {
       switch (sortKey) {
         case "crNumber":
           return r.crNumber;
+
         case "title":
           return r.title;
+
         case "dateCreated":
-          return r.dateCreated ? new Date(r.dateCreated).getTime() : null;
+          return r.dateCreated
+            ? new Date(r.dateCreated).getTime()
+            : null;
+
         case "dateModified":
-          return r.dateModified ? new Date(r.dateModified).getTime() : null;
+          return r.dateModified
+            ? new Date(r.dateModified).getTime()
+            : null;
+
         case "createdUser":
           return r.createdUser;
+
         case "workflowStatus":
           return r.workflowStatus;
+
         case "crAging":
           return ageDays(r.dateCreated);
+
         case "lastUpdatedAging":
           return ageDays(r.dateModified);
+
         case "devResource":
           return r.devResource;
+
         case "devEffort":
           return r.devEffort;
+
         case "devStartDate":
           return r.devStartDate;
+
         case "devEndDate":
           return r.devEndDate;
+
         case "sitEffort":
           return r.sitEffort;
+
         case "sitStartDate":
           return r.sitStartDate;
+
         case "uatDate":
           return r.uatDate;
+
+        case "uatSignOffDate":
+          return r.uatSignOffDate;
+
+        case "finalCrObservationDate":
+          return r.finalCrObservationDate;
+
         case "prodDate":
           return r.prodDate;
       }
     }
+
     return [...filtered].sort((a, b) => {
       const av = value(a);
       const bv = value(b);
+
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
+
       if (av < bv) return -1 * dir;
       if (av > bv) return 1 * dir;
+
       return 0;
     });
   }, [filtered, sortKey, sortDir]);
 
-  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
-  const paged = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageCount = Math.max(
+    1,
+    Math.ceil(sorted.length / PAGE_SIZE),
+  );
 
-  const SortHead = ({ k, label, className }: { k: SortKey; label: string; className?: string }) => (
+  const currentPage = Math.min(page, pageCount);
+
+  const paged = sorted.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
+
+  const SortHead = ({
+    k,
+    label,
+    className,
+  }: {
+    k: SortKey;
+    label: string;
+    className?: string;
+  }) => (
     <TableHead
-      className={cn("cursor-pointer select-none whitespace-nowrap", className)}
+      className={cn(
+        "cursor-pointer select-none whitespace-nowrap",
+        className,
+      )}
       onClick={() => toggleSort(k)}
     >
       {label}
-      {sortKey === k && <span className="ml-1 text-xs">{sortDir === "asc" ? "▲" : "▼"}</span>}
+
+      {sortKey === k && (
+        <span className="ml-1 text-xs">
+          {sortDir === "asc" ? "▲" : "▼"}
+        </span>
+      )}
     </TableHead>
   );
 
-  // Exports every filtered/sorted row (not just the current page) — the
-  // same `sorted` array the grid paginates over.
+  // Export all filtered/sorted rows.
   function handleExport() {
     const rows = sorted.map((r) => {
       const ac = ageDays(r.dateCreated);
       const am = ageDays(r.dateModified);
+
       return {
         "CR Number": sanitizeCell(r.crNumber),
         Title: sanitizeCell(r.title ?? ""),
         Developer: sanitizeCell(r.devResource ?? ""),
+
         "Dev Effort": r.devEffort ?? "",
+
         "Dev Start Date": fmtDate(r.devStartDate),
+
         "Dev End Date": fmtDate(r.devEndDate),
+
         "SIT Effort": r.sitEffort ?? "",
+
         "SIT Start Date": fmtDate(r.sitStartDate),
+
         "UAT Date": fmtDate(r.uatDate),
+
+        "UAT Sign Off Date": fmtDate(r.uatSignOffDate),
+
+        "Final CR Observation Date": fmtDate(
+          r.finalCrObservationDate,
+        ),
+
         "PROD Date": fmtDate(r.prodDate),
+
         Remarks: sanitizeCell(r.remarks ?? ""),
+
         "Date Created": fmtTimestamp(r.dateCreated),
+
         "Date Modified": fmtTimestamp(r.dateModified),
+
         "Created User": sanitizeCell(r.createdUser ?? ""),
+
         "Workflow Status": sanitizeCell(r.workflowStatus ?? ""),
+
         "CR Aging": ac ?? "",
+
         "Last Updated Aging": am ?? "",
       };
     });
-    downloadExcel(`cr-planner-${new Date().toISOString().slice(0, 10)}.xlsx`, "CR Planner", rows);
+
+    downloadExcel(
+      `cr-planner-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      "CR Planner",
+      rows,
+    );
   }
 
   return (
@@ -304,44 +406,67 @@ function CrPlannerView({ canEdit }: { canEdit: boolean }) {
         description="Plan Development, SIT, UAT, and Production timelines for active CRs."
         actions={
           <Button variant="outline" onClick={handleExport}>
-            <Download /> Export
+            <Download />
+            Export
           </Button>
         }
       />
+
       <PageBody>
         {canEdit && (
           <Card>
             <CardContent className="p-4 space-y-3">
-              <div className="text-sm font-medium">Active CR Selection</div>
+              <div className="text-sm font-medium">
+                Active CR Selection
+              </div>
+
               <div className="flex flex-wrap items-center gap-3">
-                <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+                <Popover
+                  open={pickerOpen}
+                  onOpenChange={setPickerOpen}
+                >
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-96 justify-between font-normal">
+                    <Button
+                      variant="outline"
+                      className="w-96 justify-between font-normal"
+                    >
                       {selected.size > 0
                         ? `${selected.size} CR(s) selected`
                         : "Search and select active CRs…"}
+
                       <ChevronsUpDown className="size-4 opacity-50" />
                     </Button>
                   </PopoverTrigger>
+
                   <PopoverContent className="w-96 p-0">
                     <Command>
                       <CommandInput placeholder="Search CR number or title…" />
+
                       <CommandList>
-                        <CommandEmpty>No active CRs found.</CommandEmpty>
+                        <CommandEmpty>
+                          No active CRs found.
+                        </CommandEmpty>
+
                         <CommandGroup>
                           {(activeCrs.data ?? []).map((c) => (
                             <CommandItem
                               key={c.cr_number}
                               value={`${c.cr_number} ${c.title ?? ""}`}
-                              onSelect={() => toggleSelected(c.cr_number)}
+                              onSelect={() =>
+                                toggleSelected(c.cr_number)
+                              }
                             >
                               <Check
                                 className={cn(
                                   "size-4",
-                                  selected.has(c.cr_number) ? "opacity-100" : "opacity-0",
+                                  selected.has(c.cr_number)
+                                    ? "opacity-100"
+                                    : "opacity-0",
                                 )}
                               />
-                              {c.cr_number} - {c.title ?? "(untitled)"}
+
+                              {c.cr_number} -{" "}
+                              {c.title ?? "(untitled)"}
                             </CommandItem>
                           ))}
                         </CommandGroup>
@@ -349,11 +474,21 @@ function CrPlannerView({ canEdit }: { canEdit: boolean }) {
                     </Command>
                   </PopoverContent>
                 </Popover>
+
                 <Button
-                  disabled={selected.size === 0 || addToPlanner.isPending}
-                  onClick={() => addToPlanner.mutate(Array.from(selected))}
+                  disabled={
+                    selected.size === 0 ||
+                    addToPlanner.isPending
+                  }
+                  onClick={() =>
+                    addToPlanner.mutate(
+                      Array.from(selected),
+                    )
+                  }
                 >
-                  {addToPlanner.isPending ? "Adding…" : "Add To Planner"}
+                  {addToPlanner.isPending
+                    ? "Adding…"
+                    : "Add To Planner"}
                 </Button>
               </div>
             </CardContent>
@@ -384,25 +519,93 @@ function CrPlannerView({ canEdit }: { canEdit: boolean }) {
                     label="CR Number"
                     className="sticky left-0 z-20 w-[110px] min-w-[110px] bg-card"
                   />
+
                   <SortHead
                     k="title"
                     label="Title"
                     className="sticky left-[110px] z-20 w-[220px] min-w-[220px] bg-card border-r whitespace-normal"
                   />
-                  <SortHead k="devResource" label="Developer" />
-                  <SortHead k="devEffort" label="Dev Effort" className="text-right" />
-                  <SortHead k="devStartDate" label="Dev Start Date" />
-                  <SortHead k="devEndDate" label="Dev End Date" />
-                  <SortHead k="sitEffort" label="SIT Effort" className="text-right" />
-                  <SortHead k="sitStartDate" label="SIT Start Date" />
-                  <SortHead k="uatDate" label="UAT Date" />
-                  <SortHead k="prodDate" label="PROD Date" />
+
+                  <SortHead
+                    k="devResource"
+                    label="Developer"
+                  />
+
+                  <SortHead
+                    k="devEffort"
+                    label="Dev Effort"
+                    className="text-right"
+                  />
+
+                  <SortHead
+                    k="devStartDate"
+                    label="Dev Start Date"
+                  />
+
+                  <SortHead
+                    k="devEndDate"
+                    label="Dev End Date"
+                  />
+
+                  <SortHead
+                    k="sitEffort"
+                    label="SIT Effort"
+                    className="text-right"
+                  />
+
+                  <SortHead
+                    k="sitStartDate"
+                    label="SIT Start Date"
+                  />
+
+                  <SortHead
+                    k="uatDate"
+                    label="UAT Date"
+                  />
+
+                  <SortHead
+                    k="uatSignOffDate"
+                    label="UAT Sign Off Date"
+                  />
+
+                  <SortHead
+                    k="finalCrObservationDate"
+                    label="Final CR Observation Date"
+                  />
+
+                  <SortHead
+                    k="prodDate"
+                    label="PROD Date"
+                  />
+
                   <TableHead>Remarks</TableHead>
-                  <SortHead k="dateCreated" label="Date Created" />
-                  <SortHead k="dateModified" label="Date Modified" />
-                  <SortHead k="createdUser" label="Created User" />
-                  <SortHead k="workflowStatus" label="Workflow Status" />
-                  <SortHead k="crAging" label="CR Aging" className="text-right" />
+
+                  <SortHead
+                    k="dateCreated"
+                    label="Date Created"
+                  />
+
+                  <SortHead
+                    k="dateModified"
+                    label="Date Modified"
+                  />
+
+                  <SortHead
+                    k="createdUser"
+                    label="Created User"
+                  />
+
+                  <SortHead
+                    k="workflowStatus"
+                    label="Workflow Status"
+                  />
+
+                  <SortHead
+                    k="crAging"
+                    label="CR Aging"
+                    className="text-right"
+                  />
+
                   <SortHead
                     k="lastUpdatedAging"
                     label="Last Updated Aging"
@@ -410,6 +613,7 @@ function CrPlannerView({ canEdit }: { canEdit: boolean }) {
                   />
                 </TableRow>
               </TableHeader>
+
               <TableBody>
                 {paged.map((row) => (
                   <PlannerGridRowView
@@ -419,10 +623,15 @@ function CrPlannerView({ canEdit }: { canEdit: boolean }) {
                     canEdit={canEdit}
                   />
                 ))}
+
                 {paged.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={17} className="text-center py-12 text-muted-foreground">
-                      No CRs in the planner yet — select active CRs above and click Add To Planner.
+                    <TableCell
+                      colSpan={19}
+                      className="text-center py-12 text-muted-foreground"
+                    >
+                      No CRs in the planner yet — select active
+                      CRs above and click Add To Planner.
                     </TableCell>
                   </TableRow>
                 )}
@@ -443,17 +652,25 @@ function CrPlannerView({ canEdit }: { canEdit: boolean }) {
                   }}
                 />
               </PaginationItem>
+
               <PaginationItem>
-                <PaginationLink href="#" isActive onClick={(e) => e.preventDefault()}>
+                <PaginationLink
+                  href="#"
+                  isActive
+                  onClick={(e) => e.preventDefault()}
+                >
                   {currentPage} / {pageCount}
                 </PaginationLink>
               </PaginationItem>
+
               <PaginationItem>
                 <PaginationNext
                   href="#"
                   onClick={(e) => {
                     e.preventDefault();
-                    setPage((p) => Math.min(pageCount, p + 1));
+                    setPage((p) =>
+                      Math.min(pageCount, p + 1),
+                    );
                   }}
                 />
               </PaginationItem>
@@ -471,60 +688,165 @@ function PlannerGridRowView({
   canEdit,
 }: {
   row: PlannerGridRow;
+
   plannedDates: {
     id: string;
     deployment_name: string;
     application: string | null;
     deployment_date: string;
   }[];
+
   canEdit: boolean;
 }) {
   const qc = useQueryClient();
   const updateFn = useServerFn(updatePlannerEntry);
 
-  const [devResource, setDevResource] = useState(row.devResource ?? "");
-  const [devEffort, setDevEffort] = useState(row.devEffort != null ? String(row.devEffort) : "");
-  const [devStartDate, setDevStartDate] = useState<Date | undefined>(
-    row.devStartDate ? new Date(`${row.devStartDate}T00:00:00`) : undefined,
+  const [devResource, setDevResource] = useState(
+    row.devResource ?? "",
   );
-  const [sitEffort, setSitEffort] = useState(row.sitEffort != null ? String(row.sitEffort) : "");
-  const [sitStartDate, setSitStartDate] = useState<Date | undefined>(
-    row.sitStartDate ? new Date(`${row.sitStartDate}T00:00:00`) : undefined,
+
+  const [devEffort, setDevEffort] = useState(
+    row.devEffort != null
+      ? String(row.devEffort)
+      : "",
   );
-  const [prodDate, setProdDate] = useState(row.prodDate ?? "");
-  const [remarks, setRemarks] = useState(row.remarks ?? "");
+
+  const [devStartDate, setDevStartDate] = useState<
+    Date | undefined
+  >(
+    row.devStartDate
+      ? new Date(`${row.devStartDate}T00:00:00`)
+      : undefined,
+  );
+
+  const [sitEffort, setSitEffort] = useState(
+    row.sitEffort != null
+      ? String(row.sitEffort)
+      : "",
+  );
+
+  const [sitStartDate, setSitStartDate] = useState<
+    Date | undefined
+  >(
+    row.sitStartDate
+      ? new Date(`${row.sitStartDate}T00:00:00`)
+      : undefined,
+  );
+
+  // NEW: UAT Sign Off Date
+  const [uatSignOffDate, setUatSignOffDate] = useState<
+    Date | undefined
+  >(
+    row.uatSignOffDate
+      ? new Date(`${row.uatSignOffDate}T00:00:00`)
+      : undefined,
+  );
+
+  // NEW: Final CR Observation Date
+  const [finalCrObservationDate, setFinalCrObservationDate] =
+    useState<Date | undefined>(
+      row.finalCrObservationDate
+        ? new Date(
+            `${row.finalCrObservationDate}T00:00:00`,
+          )
+        : undefined,
+    );
+
+  const [prodDate, setProdDate] = useState(
+    row.prodDate ?? "",
+  );
+
+  const [remarks, setRemarks] = useState(
+    row.remarks ?? "",
+  );
 
   const devEffortNum = parseInt(devEffort, 10);
+
   const devEndDatePreview =
-    devStartDate && Number.isInteger(devEffortNum) && devEffortNum > 0
+    devStartDate &&
+    Number.isInteger(devEffortNum) &&
+    devEffortNum > 0
       ? addWorkingDays(devStartDate, devEffortNum)
       : null;
 
   const sitEffortNum = parseInt(sitEffort, 10);
+
   const uatDatePreview =
-    sitStartDate && Number.isInteger(sitEffortNum) && sitEffortNum > 0
+    sitStartDate &&
+    Number.isInteger(sitEffortNum) &&
+    sitEffortNum > 0
       ? addWorkingDays(sitStartDate, sitEffortNum)
       : null;
 
   const update = useMutation({
-    mutationFn: (overrides: Partial<Parameters<typeof updateFn>[0]["data"]> = {}) =>
+    mutationFn: (
+      overrides: Partial<
+        Parameters<typeof updateFn>[0]["data"]
+      > = {},
+    ) =>
       updateFn({
         data: {
           crNumber: row.crNumber,
+
           devResource: devResource || null,
-          devEffort: Number.isInteger(devEffortNum) && devEffortNum > 0 ? devEffortNum : null,
-          devStartDate: devStartDate ? format(devStartDate, "yyyy-MM-dd") : null,
-          sitEffort: Number.isInteger(sitEffortNum) && sitEffortNum > 0 ? sitEffortNum : null,
-          sitStartDate: sitStartDate ? format(sitStartDate, "yyyy-MM-dd") : null,
+
+          devEffort:
+            Number.isInteger(devEffortNum) &&
+            devEffortNum > 0
+              ? devEffortNum
+              : null,
+
+          devStartDate: devStartDate
+            ? format(devStartDate, "yyyy-MM-dd")
+            : null,
+
+          sitEffort:
+            Number.isInteger(sitEffortNum) &&
+            sitEffortNum > 0
+              ? sitEffortNum
+              : null,
+
+          sitStartDate: sitStartDate
+            ? format(sitStartDate, "yyyy-MM-dd")
+            : null,
+
+          // NEW
+          uatSignOffDate: uatSignOffDate
+            ? format(
+                uatSignOffDate,
+                "yyyy-MM-dd",
+              )
+            : null,
+
+          // NEW
+          finalCrObservationDate:
+            finalCrObservationDate
+              ? format(
+                  finalCrObservationDate,
+                  "yyyy-MM-dd",
+                )
+              : null,
+
           prodDate: prodDate || null,
+
           remarks: remarks || null,
+
           ...overrides,
         },
       }),
+
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["cr-planner-grid"] });
+      qc.invalidateQueries({
+        queryKey: ["cr-planner-grid"],
+      });
     },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : String(e)),
+
+    onError: (e: unknown) =>
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : String(e),
+      ),
   });
 
   const ac = ageDays(row.dateCreated);
@@ -532,28 +854,38 @@ function PlannerGridRowView({
 
   return (
     <TableRow>
+      {/* CR Number */}
       <TableCell className="sticky left-0 z-10 w-[110px] min-w-[110px] bg-card font-medium whitespace-nowrap">
         {row.crNumber}
       </TableCell>
+
+      {/* Title */}
       <TableCell className="sticky left-[110px] z-10 w-[220px] min-w-[220px] bg-card border-r whitespace-normal break-words align-top">
         {row.title}
       </TableCell>
 
+      {/* Developer */}
       <TableCell>
         {canEdit ? (
           <Select
             value={devResource || undefined}
             onValueChange={(v) => {
               setDevResource(v);
-              update.mutate({ devResource: v });
+              update.mutate({
+                devResource: v,
+              });
             }}
           >
             <SelectTrigger className="w-20 h-8">
               <SelectValue placeholder="—" />
             </SelectTrigger>
+
             <SelectContent>
               {DEV_RESOURCES.map((r) => (
-                <SelectItem key={r} value={r}>
+                <SelectItem
+                  key={r}
+                  value={r}
+                >
                   {r}
                 </SelectItem>
               ))}
@@ -564,6 +896,7 @@ function PlannerGridRowView({
         )}
       </TableCell>
 
+      {/* Dev Effort */}
       <TableCell>
         {canEdit ? (
           <Input
@@ -571,10 +904,17 @@ function PlannerGridRowView({
             min={1}
             className="w-20 h-8"
             value={devEffort}
-            onChange={(e) => setDevEffort(e.target.value)}
+            onChange={(e) =>
+              setDevEffort(e.target.value)
+            }
             onBlur={() => {
-              if ((row.devEffort != null ? String(row.devEffort) : "") !== devEffort)
+              if (
+                (row.devEffort != null
+                  ? String(row.devEffort)
+                  : "") !== devEffort
+              ) {
                 update.mutate({});
+              }
             }}
           />
         ) : (
@@ -582,26 +922,46 @@ function PlannerGridRowView({
         )}
       </TableCell>
 
+      {/* Dev Start Date */}
       <TableCell>
         {canEdit ? (
           <div className="flex items-center gap-1">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="w-32 justify-start font-normal">
-                  {devStartDate ? format(devStartDate, "dd-MMM-yyyy") : "—"}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-32 justify-start font-normal"
+                >
+                  {devStartDate
+                    ? format(
+                        devStartDate,
+                        "dd-MMM-yyyy",
+                      )
+                    : "—"}
                 </Button>
               </PopoverTrigger>
+
               <PopoverContent className="w-auto p-0">
                 <Calendar
                   mode="single"
                   selected={devStartDate}
                   onSelect={(d) => {
                     setDevStartDate(d);
-                    update.mutate({ devStartDate: d ? format(d, "yyyy-MM-dd") : null });
+
+                    update.mutate({
+                      devStartDate: d
+                        ? format(
+                            d,
+                            "yyyy-MM-dd",
+                          )
+                        : null,
+                    });
                   }}
                 />
               </PopoverContent>
             </Popover>
+
             {devStartDate && (
               <Button
                 variant="ghost"
@@ -609,12 +969,13 @@ function PlannerGridRowView({
                 className="size-6 shrink-0"
                 title="Clear date"
                 onClick={() => {
-                  // Effort without a start date can't compute an end date, and
-                  // fails the "Dev Start Date required if Dev Effort entered"
-                  // rule server-side — clear both together, not just the date.
                   setDevStartDate(undefined);
                   setDevEffort("");
-                  update.mutate({ devStartDate: null, devEffort: null });
+
+                  update.mutate({
+                    devStartDate: null,
+                    devEffort: null,
+                  });
                 }}
               >
                 <X className="size-3" />
@@ -622,16 +983,26 @@ function PlannerGridRowView({
             )}
           </div>
         ) : devStartDate ? (
-          format(devStartDate, "dd-MMM-yyyy")
+          format(
+            devStartDate,
+            "dd-MMM-yyyy",
+          )
         ) : (
           "—"
         )}
       </TableCell>
 
+      {/* Dev End Date */}
       <TableCell className="bg-muted text-xs whitespace-nowrap">
-        {devEndDatePreview ? format(devEndDatePreview, "dd-MMM-yyyy") : "—"}
+        {devEndDatePreview
+          ? format(
+              devEndDatePreview,
+              "dd-MMM-yyyy",
+            )
+          : "—"}
       </TableCell>
 
+      {/* SIT Effort */}
       <TableCell>
         {canEdit ? (
           <Input
@@ -639,10 +1010,17 @@ function PlannerGridRowView({
             min={1}
             className="w-20 h-8"
             value={sitEffort}
-            onChange={(e) => setSitEffort(e.target.value)}
+            onChange={(e) =>
+              setSitEffort(e.target.value)
+            }
             onBlur={() => {
-              if ((row.sitEffort != null ? String(row.sitEffort) : "") !== sitEffort)
+              if (
+                (row.sitEffort != null
+                  ? String(row.sitEffort)
+                  : "") !== sitEffort
+              ) {
                 update.mutate({});
+              }
             }}
           />
         ) : (
@@ -650,26 +1028,46 @@ function PlannerGridRowView({
         )}
       </TableCell>
 
+      {/* SIT Start Date */}
       <TableCell>
         {canEdit ? (
           <div className="flex items-center gap-1">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="w-32 justify-start font-normal">
-                  {sitStartDate ? format(sitStartDate, "dd-MMM-yyyy") : "—"}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-32 justify-start font-normal"
+                >
+                  {sitStartDate
+                    ? format(
+                        sitStartDate,
+                        "dd-MMM-yyyy",
+                      )
+                    : "—"}
                 </Button>
               </PopoverTrigger>
+
               <PopoverContent className="w-auto p-0">
                 <Calendar
                   mode="single"
                   selected={sitStartDate}
                   onSelect={(d) => {
                     setSitStartDate(d);
-                    update.mutate({ sitStartDate: d ? format(d, "yyyy-MM-dd") : null });
+
+                    update.mutate({
+                      sitStartDate: d
+                        ? format(
+                            d,
+                            "yyyy-MM-dd",
+                          )
+                        : null,
+                    });
                   }}
                 />
               </PopoverContent>
             </Popover>
+
             {sitStartDate && (
               <Button
                 variant="ghost"
@@ -677,12 +1075,13 @@ function PlannerGridRowView({
                 className="size-6 shrink-0"
                 title="Clear date"
                 onClick={() => {
-                  // Same reasoning as Dev Start Date's clear button — clear
-                  // the paired effort too, or the server's "SIT Start Date
-                  // required if SIT Effort entered" rule rejects it.
                   setSitStartDate(undefined);
                   setSitEffort("");
-                  update.mutate({ sitStartDate: null, sitEffort: null });
+
+                  update.mutate({
+                    sitStartDate: null,
+                    sitEffort: null,
+                  });
                 }}
               >
                 <X className="size-3" />
@@ -690,16 +1089,167 @@ function PlannerGridRowView({
             )}
           </div>
         ) : sitStartDate ? (
-          format(sitStartDate, "dd-MMM-yyyy")
+          format(
+            sitStartDate,
+            "dd-MMM-yyyy",
+          )
         ) : (
           "—"
         )}
       </TableCell>
 
+      {/* UAT Date - Calculated */}
       <TableCell className="bg-muted text-xs whitespace-nowrap">
-        {uatDatePreview ? format(uatDatePreview, "dd-MMM-yyyy") : "—"}
+        {uatDatePreview
+          ? format(
+              uatDatePreview,
+              "dd-MMM-yyyy",
+            )
+          : "—"}
       </TableCell>
 
+      {/* NEW: UAT Sign Off Date */}
+      <TableCell>
+        {canEdit ? (
+          <div className="flex items-center gap-1">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-32 justify-start font-normal"
+                >
+                  {uatSignOffDate
+                    ? format(
+                        uatSignOffDate,
+                        "dd-MMM-yyyy",
+                      )
+                    : "—"}
+                </Button>
+              </PopoverTrigger>
+
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={uatSignOffDate}
+                  onSelect={(d) => {
+                    setUatSignOffDate(d);
+
+                    update.mutate({
+                      uatSignOffDate: d
+                        ? format(
+                            d,
+                            "yyyy-MM-dd",
+                          )
+                        : null,
+                    });
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+
+            {uatSignOffDate && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 shrink-0"
+                title="Clear date"
+                onClick={() => {
+                  setUatSignOffDate(undefined);
+
+                  update.mutate({
+                    uatSignOffDate: null,
+                  });
+                }}
+              >
+                <X className="size-3" />
+              </Button>
+            )}
+          </div>
+        ) : uatSignOffDate ? (
+          format(
+            uatSignOffDate,
+            "dd-MMM-yyyy",
+          )
+        ) : (
+          "—"
+        )}
+      </TableCell>
+
+      {/* NEW: Final CR Observation Date */}
+      <TableCell>
+        {canEdit ? (
+          <div className="flex items-center gap-1">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-32 justify-start font-normal"
+                >
+                  {finalCrObservationDate
+                    ? format(
+                        finalCrObservationDate,
+                        "dd-MMM-yyyy",
+                      )
+                    : "—"}
+                </Button>
+              </PopoverTrigger>
+
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={
+                    finalCrObservationDate
+                  }
+                  onSelect={(d) => {
+                    setFinalCrObservationDate(d);
+
+                    update.mutate({
+                      finalCrObservationDate:
+                        d
+                          ? format(
+                              d,
+                              "yyyy-MM-dd",
+                            )
+                          : null,
+                    });
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+
+            {finalCrObservationDate && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 shrink-0"
+                title="Clear date"
+                onClick={() => {
+                  setFinalCrObservationDate(
+                    undefined,
+                  );
+
+                  update.mutate({
+                    finalCrObservationDate: null,
+                  });
+                }}
+              >
+                <X className="size-3" />
+              </Button>
+            )}
+          </div>
+        ) : finalCrObservationDate ? (
+          format(
+            finalCrObservationDate,
+            "dd-MMM-yyyy",
+          )
+        ) : (
+          "—"
+        )}
+      </TableCell>
+
+      {/* PROD Date */}
       <TableCell>
         {canEdit ? (
           <div className="flex items-center gap-1">
@@ -707,21 +1257,34 @@ function PlannerGridRowView({
               value={prodDate || undefined}
               onValueChange={(v) => {
                 setProdDate(v);
-                update.mutate({ prodDate: v });
+
+                update.mutate({
+                  prodDate: v,
+                });
               }}
             >
               <SelectTrigger className="w-36 h-8">
                 <SelectValue placeholder="Pick date…" />
               </SelectTrigger>
+
               <SelectContent>
                 {plannedDates.map((d) => (
-                  <SelectItem key={d.id} value={d.deployment_date}>
-                    {fmtDate(d.deployment_date)} — {d.deployment_name}
-                    {d.application ? ` (${d.application})` : ""}
+                  <SelectItem
+                    key={d.id}
+                    value={d.deployment_date}
+                  >
+                    {fmtDate(
+                      d.deployment_date,
+                    )}{" "}
+                    — {d.deployment_name}
+                    {d.application
+                      ? ` (${d.application})`
+                      : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+
             {prodDate && (
               <Button
                 variant="ghost"
@@ -730,7 +1293,10 @@ function PlannerGridRowView({
                 title="Clear date"
                 onClick={() => {
                   setProdDate("");
-                  update.mutate({ prodDate: null });
+
+                  update.mutate({
+                    prodDate: null,
+                  });
                 }}
               >
                 <X className="size-3" />
@@ -744,15 +1310,23 @@ function PlannerGridRowView({
         )}
       </TableCell>
 
+      {/* Remarks */}
       <TableCell>
         {canEdit ? (
           <Textarea
             className="min-w-40"
             rows={1}
             value={remarks}
-            onChange={(e) => setRemarks(e.target.value)}
+            onChange={(e) =>
+              setRemarks(e.target.value)
+            }
             onBlur={() => {
-              if ((row.remarks ?? "") !== remarks) update.mutate({});
+              if (
+                (row.remarks ?? "") !==
+                remarks
+              ) {
+                update.mutate({});
+              }
             }}
           />
         ) : (
@@ -760,12 +1334,35 @@ function PlannerGridRowView({
         )}
       </TableCell>
 
-      <TableCell className="text-xs whitespace-nowrap">{fmtTimestamp(row.dateCreated)}</TableCell>
-      <TableCell className="text-xs whitespace-nowrap">{fmtTimestamp(row.dateModified)}</TableCell>
-      <TableCell>{row.createdUser ?? "—"}</TableCell>
-      <TableCell className="text-xs text-muted-foreground">{row.workflowStatus}</TableCell>
-      <TableCell className="text-right tabular-nums">{ac == null ? "—" : `${ac}d`}</TableCell>
-      <TableCell className="text-right tabular-nums">{am == null ? "—" : `${am}d`}</TableCell>
+      {/* Date Created */}
+      <TableCell className="text-xs whitespace-nowrap">
+        {fmtTimestamp(row.dateCreated)}
+      </TableCell>
+
+      {/* Date Modified */}
+      <TableCell className="text-xs whitespace-nowrap">
+        {fmtTimestamp(row.dateModified)}
+      </TableCell>
+
+      {/* Created User */}
+      <TableCell>
+        {row.createdUser ?? "—"}
+      </TableCell>
+
+      {/* Workflow Status */}
+      <TableCell className="text-xs text-muted-foreground">
+        {row.workflowStatus}
+      </TableCell>
+
+      {/* CR Aging */}
+      <TableCell className="text-right tabular-nums">
+        {ac == null ? "—" : `${ac}d`}
+      </TableCell>
+
+      {/* Last Updated Aging */}
+      <TableCell className="text-right tabular-nums">
+        {am == null ? "—" : `${am}d`}
+      </TableCell>
     </TableRow>
   );
 }
