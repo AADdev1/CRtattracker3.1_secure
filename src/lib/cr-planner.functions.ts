@@ -214,7 +214,6 @@ export const updatePlannerEntry = createServerFn({ method: "POST" })
         sitEffort: optionalNumber,
         sitStartDate: optionalText,
         prodDate: optionalText,
-        remarks: optionalText,
       }),
     ),
   )
@@ -267,7 +266,6 @@ export const updatePlannerEntry = createServerFn({ method: "POST" })
       sit_start_date: data.sitStartDate ?? null,
       uat_date: uatDate,
       prod_date: data.prodDate ?? null,
-      remarks: data.remarks ?? null,
       modified_by: userName,
       modified_at: new Date().toISOString(),
     };
@@ -295,4 +293,80 @@ export const updatePlannerEntry = createServerFn({ method: "POST" })
     }
 
     return { ok: true as const, devEndDate, uatDate };
+  });
+
+// ─────────────────────────── Remarks history ───────────────────────────
+// Append-only running log of remarks against a planner entry (its own
+// cr_planner_remarks table, same shape/convention as cr_updates.functions.ts's
+// CR Repository Updates log). cr_planner.remarks itself keeps holding the
+// latest entry's text — addPlannerRemark updates both in the same call — so
+// grid display, sort, and Excel export keep reading that single column
+// unchanged; the history table is purely additive.
+
+// Full remarks history for one planner CR, newest first. Same visibility
+// rule as listPlannerGrid: ITPM only sees history for CRs where they're the
+// assigned ITPM, Admin sees everything.
+export const listPlannerRemarks = createServerFn({ method: "GET" })
+  .inputValidator(validated(z.object({ crNumber: text })))
+  .handler(async ({ data }) => {
+    const { userName, isAdmin } = await assertPlannerViewer();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    if (!isAdmin) {
+      const { data: cr, error: crErr } = await supabaseAdmin
+        .from("crs")
+        .select("itpm")
+        .eq("cr_number", data.crNumber)
+        .maybeSingle();
+      if (crErr) throw new Error(crErr.message);
+      if (!cr || cr.itpm !== userName) {
+        throw new Error("Forbidden: not the assigned ITPM for this CR");
+      }
+    }
+
+    const { data: rows, error } = await supabaseAdmin
+      .from("cr_planner_remarks")
+      .select("id, remark_text, created_by, created_at")
+      .eq("cr_number", data.crNumber)
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return rows ?? [];
+  });
+
+// Adds a remark to the history and mirrors it onto cr_planner.remarks as
+// the latest value. ITPM only, same as every other planner write.
+export const addPlannerRemark = createServerFn({ method: "POST" })
+  .inputValidator(validated(z.object({ crNumber: text, remarkText: text })))
+  .handler(async ({ data }) => {
+    const { userName } = await assertPlannerActor();
+    const remarkText = data.remarkText.trim();
+    if (!remarkText) throw new Error("Remark text is required");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: planner, error: plannerErr } = await supabaseAdmin
+      .from("cr_planner")
+      .select("planner_id")
+      .eq("cr_number", data.crNumber)
+      .maybeSingle();
+    if (plannerErr) throw new Error(plannerErr.message);
+    if (!planner) throw new Error("CR is not in the planner");
+
+    const { data: row, error: insertErr } = await supabaseAdmin
+      .from("cr_planner_remarks")
+      .insert({ cr_number: data.crNumber, remark_text: remarkText, created_by: userName } as never)
+      .select("id, remark_text, created_by, created_at")
+      .single();
+    if (insertErr) throw new Error(insertErr.message);
+
+    const { error: updateErr } = await supabaseAdmin
+      .from("cr_planner")
+      .update({
+        remarks: remarkText,
+        modified_by: userName,
+        modified_at: new Date().toISOString(),
+      } as never)
+      .eq("cr_number", data.crNumber);
+    if (updateErr) throw new Error(updateErr.message);
+
+    return row;
   });

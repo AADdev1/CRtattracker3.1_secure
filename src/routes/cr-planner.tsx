@@ -3,15 +3,25 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Check, ChevronsUpDown, Download, X } from "lucide-react";
+import { Check, ChevronsUpDown, Download, History, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import {
   Command,
   CommandEmpty,
@@ -50,9 +60,11 @@ import { addWorkingDays } from "@/lib/working-days";
 import { downloadExcel, sanitizeCell } from "@/lib/export-excel";
 import {
   addCrsToPlanner,
+  addPlannerRemark,
   listActiveCrsForPlanner,
   listPlannedDeploymentDates,
   listPlannerGrid,
+  listPlannerRemarks,
   updatePlannerEntry,
 } from "@/lib/cr-planner.functions";
 
@@ -756,10 +768,6 @@ function PlannerGridRowView({
     row.prodDate ?? "",
   );
 
-  const [remarks, setRemarks] = useState(
-    row.remarks ?? "",
-  );
-
   const devEffortNum = parseInt(devEffort, 10);
 
   const devEndDatePreview =
@@ -828,8 +836,6 @@ function PlannerGridRowView({
               : null,
 
           prodDate: prodDate || null,
-
-          remarks: remarks || null,
 
           ...overrides,
         },
@@ -1312,26 +1318,13 @@ function PlannerGridRowView({
 
       {/* Remarks */}
       <TableCell>
-        {canEdit ? (
-          <Textarea
-            className="min-w-40"
-            rows={1}
-            value={remarks}
-            onChange={(e) =>
-              setRemarks(e.target.value)
-            }
-            onBlur={() => {
-              if (
-                (row.remarks ?? "") !==
-                remarks
-              ) {
-                update.mutate({});
-              }
-            }}
-          />
-        ) : (
-          remarks || "—"
-        )}
+        <RemarksCell
+          crNumber={row.crNumber}
+          title={row.title}
+          workflowStatus={row.workflowStatus}
+          latestRemark={row.remarks}
+          canEdit={canEdit}
+        />
       </TableCell>
 
       {/* Date Created */}
@@ -1364,5 +1357,188 @@ function PlannerGridRowView({
         {am == null ? "—" : `${am}d`}
       </TableCell>
     </TableRow>
+  );
+}
+
+// CR Planner's Remarks cell — hovering shows the full remarks history in a
+// popover preview; clicking opens a dialog with a few CR details, the same
+// full history, and (ITPM only) a free-text box to add a new remark. Every
+// addition is a new, dated, attributed entry — never an overwrite — via
+// addPlannerRemark; the latest entry's text also becomes the row's
+// `remarks` value (row.remarks), so the cell and the Excel export always
+// show the most recent remark even before the dialog/hover fetch history.
+function RemarksCell({
+  crNumber,
+  title,
+  workflowStatus,
+  latestRemark,
+  canEdit,
+}: {
+  crNumber: string;
+  title: string | null;
+  workflowStatus: string | null;
+  latestRemark: string | null;
+  canEdit: boolean;
+}) {
+  const qc = useQueryClient();
+  const listFn = useServerFn(listPlannerRemarks);
+  const addFn = useServerFn(addPlannerRemark);
+
+  const [hoverOpen, setHoverOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [text, setText] = useState("");
+
+  const historyEnabled = hoverOpen || dialogOpen;
+
+  const history = useQuery({
+    queryKey: ["cr-planner-remarks", crNumber],
+    queryFn: () => listFn({ data: { crNumber } }),
+    enabled: historyEnabled,
+  });
+
+  const submit = useMutation({
+    mutationFn: () =>
+      addFn({ data: { crNumber, remarkText: text } }),
+
+    onSuccess: () => {
+      toast.success("Remark added");
+      setText("");
+
+      qc.invalidateQueries({
+        queryKey: ["cr-planner-remarks", crNumber],
+      });
+
+      qc.invalidateQueries({
+        queryKey: ["cr-planner-grid"],
+      });
+    },
+
+    onError: (e: unknown) =>
+      toast.error(e instanceof Error ? e.message : String(e)),
+  });
+
+  const entries = history.data ?? [];
+
+  const HistoryList = ({ empty }: { empty: string }) =>
+    history.isLoading ? (
+      <div className="text-xs text-muted-foreground text-center py-4">
+        Loading…
+      </div>
+    ) : entries.length === 0 ? (
+      <div className="text-xs text-muted-foreground text-center py-4">
+        {empty}
+      </div>
+    ) : (
+      <ol className="relative border-l border-border ml-2 space-y-3">
+        {entries.map((r) => (
+          <li key={r.id} className="ml-4">
+            <span className="absolute -left-1 size-2 rounded-full ring-2 ring-background bg-primary" />
+            <div className="flex items-baseline gap-2">
+              <span className="text-[11px] text-muted-foreground tabular-nums">
+                {fmtTimestamp(r.created_at)}
+              </span>
+              <span className="text-[11px] font-medium text-muted-foreground">
+                {r.created_by}
+              </span>
+            </div>
+            <div className="text-xs mt-0.5 whitespace-pre-wrap break-words">
+              {r.remark_text}
+            </div>
+          </li>
+        ))}
+      </ol>
+    );
+
+  return (
+    <>
+      <HoverCard
+        open={hoverOpen}
+        onOpenChange={setHoverOpen}
+        openDelay={200}
+      >
+        <HoverCardTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-1 max-w-48 text-left text-xs hover:underline"
+            onClick={() => setDialogOpen(true)}
+          >
+            <History className="size-3 shrink-0 text-muted-foreground" />
+
+            <span className="truncate">
+              {latestRemark ||
+                (canEdit ? "Add remark…" : "—")}
+            </span>
+          </button>
+        </HoverCardTrigger>
+
+        <HoverCardContent className="w-80">
+          <div className="text-xs font-medium mb-2">
+            Remarks history
+          </div>
+
+          <div className="max-h-64 overflow-y-auto">
+            <HistoryList empty="No remarks yet." />
+          </div>
+        </HoverCardContent>
+      </HoverCard>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remarks — {crNumber}</DialogTitle>
+          </DialogHeader>
+
+          <div className="text-sm text-muted-foreground space-y-0.5">
+            <div>
+              <span className="font-medium text-foreground">
+                Title:
+              </span>{" "}
+              {title ?? "—"}
+            </div>
+
+            <div>
+              <span className="font-medium text-foreground">
+                Workflow Status:
+              </span>{" "}
+              {workflowStatus ?? "—"}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {canEdit && (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="Add a remark…"
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === "Enter" &&
+                      text.trim() &&
+                      !submit.isPending
+                    ) {
+                      submit.mutate();
+                    }
+                  }}
+                />
+
+                <Button
+                  size="sm"
+                  className="shrink-0"
+                  disabled={!text.trim() || submit.isPending}
+                  onClick={() => submit.mutate()}
+                >
+                  {submit.isPending ? "Saving…" : "Add"}
+                </Button>
+              </div>
+            )}
+
+            <div className="max-h-80 overflow-y-auto">
+              <HistoryList empty="No remarks posted yet." />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
