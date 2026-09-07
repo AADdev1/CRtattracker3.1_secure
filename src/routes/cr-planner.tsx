@@ -1421,27 +1421,27 @@ function RemarksCell({
 
   const HistoryList = ({ empty }: { empty: string }) =>
     history.isLoading ? (
-      <div className="text-xs text-muted-foreground text-center py-4">
+      <div className="text-base text-muted-foreground text-center py-6">
         Loading…
       </div>
     ) : entries.length === 0 ? (
-      <div className="text-xs text-muted-foreground text-center py-4">
+      <div className="text-base text-muted-foreground text-center py-6">
         {empty}
       </div>
     ) : (
-      <ol className="relative border-l border-border ml-2 space-y-3">
+      <ol className="relative border-l-2 border-border ml-2 space-y-5">
         {entries.map((r) => (
-          <li key={r.id} className="ml-4">
-            <span className="absolute -left-1 size-2 rounded-full ring-2 ring-background bg-primary" />
-            <div className="flex items-baseline gap-2">
-              <span className="text-[11px] text-muted-foreground tabular-nums">
+          <li key={r.id} className="ml-5">
+            <span className="absolute -left-[7px] size-3 rounded-full ring-2 ring-background bg-primary" />
+            <div className="flex items-baseline gap-3">
+              <span className="text-sm text-muted-foreground tabular-nums">
                 {fmtTimestamp(r.created_at)}
               </span>
-              <span className="text-[11px] font-medium text-muted-foreground">
+              <span className="text-sm font-medium text-muted-foreground">
                 {r.created_by}
               </span>
             </div>
-            <div className="text-xs mt-0.5 whitespace-pre-wrap break-words">
+            <div className="text-base mt-1 whitespace-pre-wrap break-words">
               {r.remark_text}
             </div>
           </li>
@@ -1471,24 +1471,26 @@ function RemarksCell({
           </button>
         </HoverCardTrigger>
 
-        <HoverCardContent className="w-80">
-          <div className="text-xs font-medium mb-2">
+        <HoverCardContent className="w-[28rem] p-5">
+          <div className="text-base font-semibold mb-3">
             Remarks history
           </div>
 
-          <div className="max-h-64 overflow-y-auto">
+          <div className="max-h-96 overflow-y-auto pr-1">
             <HistoryList empty="No remarks yet." />
           </div>
         </HoverCardContent>
       </HoverCard>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Remarks — {crNumber}</DialogTitle>
+            <DialogTitle className="text-2xl">
+              Remarks — {crNumber}
+            </DialogTitle>
           </DialogHeader>
 
-          <div className="text-sm text-muted-foreground space-y-0.5">
+          <div className="text-base text-muted-foreground space-y-1">
             <div>
               <span className="font-medium text-foreground">
                 Title:
@@ -1504,13 +1506,14 @@ function RemarksCell({
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-5">
             {canEdit && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <Input
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder="Add a remark…"
+                  className="h-11 text-base md:text-base"
                   onKeyDown={(e) => {
                     if (
                       e.key === "Enter" &&
@@ -1523,8 +1526,7 @@ function RemarksCell({
                 />
 
                 <Button
-                  size="sm"
-                  className="shrink-0"
+                  className="shrink-0 h-11 text-base"
                   disabled={!text.trim() || submit.isPending}
                   onClick={() => submit.mutate()}
                 >
@@ -1533,7 +1535,7 @@ function RemarksCell({
               </div>
             )}
 
-            <div className="max-h-80 overflow-y-auto">
+            <div className="max-h-[28rem] overflow-y-auto pr-1">
               <HistoryList empty="No remarks posted yet." />
             </div>
           </div>
