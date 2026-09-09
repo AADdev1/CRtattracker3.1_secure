@@ -38,6 +38,36 @@ export const listUpdatesByCr = createServerFn({ method: "GET" })
     return rows ?? [];
   });
 
+// Latest update per CR, across every CR that has at least one — powers the
+// CR Repository grid's Updates cell preview (shown without opening the
+// dialog, same as CR Planner's remarks-mirror column). No per-CR "latest"
+// column exists here (unlike cr_planner.remarks), so this fetches every
+// row ordered newest-first and keeps only the first one seen per cr_number
+// — same client-side-merge style already used throughout this codebase
+// (e.g. cr-planner.functions.ts's listPlannerGrid).
+export const getLatestCrUpdates = createServerFn({ method: "GET" }).handler(async () => {
+  assertHasRoleOrAdmin(await requireSessionUser());
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: rows, error } = await supabaseAdmin
+    .from("cr_updates")
+    .select("cr_number, update_text, created_by, created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+
+  const latestByCr = new Map<string, { update_text: string; created_by: string; created_at: string }>();
+  for (const r of rows ?? []) {
+    if (!latestByCr.has(r.cr_number)) {
+      latestByCr.set(r.cr_number, {
+        update_text: r.update_text,
+        created_by: r.created_by,
+        created_at: r.created_at,
+      });
+    }
+  }
+
+  return Array.from(latestByCr, ([cr_number, latest]) => ({ cr_number, ...latest }));
+});
+
 export const addCrUpdate = createServerFn({ method: "POST" })
   .inputValidator(validated(z.object({ crNumber: textSchema, updateText: textSchema })))
   .handler(async ({ data }) => {
