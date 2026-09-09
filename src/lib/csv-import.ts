@@ -150,6 +150,10 @@ const importCrRows = createServerFn({ method: "POST" })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const upsertRows: any[] = [];
+    // Non-blank Title values, applied in a separate targeted pass below —
+    // see the "Never overwrite manual fields" comment for why title can't
+    // just stay in dbRow like every other column.
+    const titleUpdates: { cr_number: string; title: string }[] = [];
 
     for (const row of rows) {
       const crNumber = row["CR Number"]?.trim();
@@ -184,6 +188,18 @@ const importCrRows = createServerFn({ method: "POST" })
       delete dbRow.manual_notes;
       delete dbRow.is_dropped;
 
+      // A blank Title cell must never null out a CR's existing title — CMS
+      // exports sometimes drop the Title value for CRs that already have
+      // one on file. title still needs to update when the CSV genuinely
+      // provides one, so — unlike cr_size/manual_notes/is_dropped, which
+      // are always left out of the import — it's pulled out of every row
+      // here and only re-applied for rows with a non-blank value, via a
+      // separate targeted pass after the main upsert below. (It can't stay
+      // in dbRow only when non-blank: PostgREST's bulk upsert requires
+      // every object in the batch to share the same keys.)
+      if (dbRow.title) titleUpdates.push({ cr_number: crNumber, title: dbRow.title });
+      delete dbRow.title;
+
       // Safety net: a CR marked dropped is auto-reactivated if this report
       // shows it in some other (non-dropped) status — omitted otherwise, so
       // the existing manual flag is preserved by the upsert.
@@ -203,6 +219,16 @@ const importCrRows = createServerFn({ method: "POST" })
     const chunkSize = 200;
     for (let i = 0; i < upsertRows.length; i += chunkSize) {
       const chunk = upsertRows.slice(i, i + chunkSize);
+      const { error } = await supabaseAdmin
+        .from("crs")
+        .upsert(chunk, { onConflict: "cr_number" });
+      if (error) errors.push(error.message);
+    }
+
+    // Targeted title pass — every cr_number here was just inserted or
+    // already existed via the upsert above, so this only ever updates.
+    for (let i = 0; i < titleUpdates.length; i += chunkSize) {
+      const chunk = titleUpdates.slice(i, i + chunkSize);
       const { error } = await supabaseAdmin
         .from("crs")
         .upsert(chunk, { onConflict: "cr_number" });
