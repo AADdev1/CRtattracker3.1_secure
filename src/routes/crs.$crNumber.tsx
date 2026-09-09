@@ -275,7 +275,7 @@ function CrDetails() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
+            <CardTitle className="text-xl">
               Updates{" "}
               <span className="text-muted-foreground font-normal">
                 ({(updates.data ?? []).length})
@@ -284,23 +284,23 @@ function CrDetails() {
           </CardHeader>
           <CardContent>
             {(updates.data ?? []).length === 0 ? (
-              <div className="text-sm text-muted-foreground">
+              <div className="text-base text-muted-foreground">
                 No updates posted yet — add one from the CR Repository grid.
               </div>
             ) : (
-              <ol className="relative border-l border-border ml-2 space-y-4">
+              <ol className="relative border-l-2 border-border ml-2 space-y-5">
                 {(updates.data ?? []).map((u) => (
                   <li key={u.id} className="ml-5">
-                    <span className="absolute -left-1.5 size-3 rounded-full ring-2 ring-background bg-primary" />
+                    <span className="absolute -left-[7px] size-3 rounded-full ring-2 ring-background bg-primary" />
                     <div className="flex items-baseline gap-3">
-                      <span className="text-xs text-muted-foreground tabular-nums w-36 shrink-0">
+                      <span className="text-sm text-muted-foreground tabular-nums w-36 shrink-0">
                         {fmt(u.created_at)}
                       </span>
-                      <span className="text-xs font-medium text-muted-foreground">
+                      <span className="text-sm font-medium text-muted-foreground">
                         {u.created_by}
                       </span>
                     </div>
-                    <div className="text-sm mt-0.5">{u.update_text}</div>
+                    <div className="text-base mt-1">{u.update_text}</div>
                   </li>
                 ))}
               </ol>

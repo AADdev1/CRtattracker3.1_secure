@@ -25,7 +25,7 @@ import {
   ArrowUp,
   ArrowDown,
   Pencil,
-  MessageSquarePlus,
+  History,
   Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -36,15 +36,19 @@ import {
   DialogTitle,
   DialogFooter,
   DialogDescription,
-  DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { toast } from "sonner";
 import { recalculateForCr } from "@/lib/kpi-engine";
 import { aggregateDefectStats } from "@/lib/defect-import";
 import { getScopedCrs, getScopedDefects } from "@/lib/scoped-data.functions";
 import { getWorkflowStatuses } from "@/lib/workflow-statuses.functions";
 import { updateCrWorkflowStatus } from "@/lib/crs-admin.functions";
-import { addCrUpdate, listUpdatesByCr } from "@/lib/cr-updates.functions";
+import { addCrUpdate, getLatestCrUpdates, listUpdatesByCr } from "@/lib/cr-updates.functions";
 import { getTestCaseCompletionByCr } from "@/lib/test-cases.functions";
 import {
   DEPLOYMENT_TERMINAL_WORKFLOW_STATUSES,
@@ -192,6 +196,17 @@ function CrRepository() {
       return new Map(rows.map((r) => [r.cr_number, r]));
     },
     enabled: FEATURES.deployment,
+  });
+
+  // Latest CR Update per CR, for the Updates cell's preview text — same
+  // bulk-fetch-then-map shape as defectStats/deploymentInfo above, so the
+  // grid doesn't need a per-row query just to show the most recent note.
+  const latestUpdates = useQuery({
+    queryKey: ["latest-cr-updates"],
+    queryFn: async () => {
+      const rows = await getLatestCrUpdates();
+      return new Map(rows.map((r) => [r.cr_number, r]));
+    },
   });
 
   const apps = useMemo(() => {
@@ -604,7 +619,13 @@ function CrRepository() {
                         </>
                       )}
                       <TableCell>
-                        <CrUpdateCell crNumber={c.cr_number} canEdit={canEditStatus} />
+                        <CrUpdateCell
+                          crNumber={c.cr_number}
+                          title={c.title}
+                          workflowStatus={c.workflow_status}
+                          latestUpdate={latestUpdates.data?.get(c.cr_number) ?? null}
+                          canEdit={canEditStatus}
+                        />
                       </TableCell>
                       <TableCell className="text-right">
                         {canEditStatus && (
@@ -705,19 +726,37 @@ function fmtDateTime(d: string | null): string {
   return Number.isNaN(dt.getTime()) ? "—" : dt.toLocaleString();
 }
 
-// CR Repository's Updates column — a button that opens a popup with an
-// add-update box and the CR's full update history below it. History is
-// only fetched once the dialog is actually opened, not for every row on
-// page load.
-function CrUpdateCell({ crNumber, canEdit }: { crNumber: string; canEdit: boolean }) {
+// CR Repository's Updates column — same hover-preview / click-to-open-a-
+// big-dialog pattern as CR Planner's Remarks cell (src/routes/cr-planner.tsx's
+// RemarksCell): hovering the latest-update preview shows the full history in
+// a popover, clicking opens a dialog with a few CR details, the full
+// history, and (when canEdit) a free-text box to add a new update. History
+// is only fetched once hovered or opened, not for every row on page load —
+// the preview text itself comes from the bulk latestUpdates map instead.
+function CrUpdateCell({
+  crNumber,
+  title,
+  workflowStatus,
+  latestUpdate,
+  canEdit,
+}: {
+  crNumber: string;
+  title: string | null;
+  workflowStatus: string | null;
+  latestUpdate: { update_text: string; created_by: string; created_at: string } | null;
+  canEdit: boolean;
+}) {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [hoverOpen, setHoverOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [text, setText] = useState("");
+
+  const historyEnabled = hoverOpen || dialogOpen;
 
   const updates = useQuery({
     queryKey: ["cr-updates", crNumber],
     queryFn: () => listUpdatesByCr({ data: { crNumber } }),
-    enabled: open,
+    enabled: historyEnabled,
   });
 
   const submit = useMutation({
@@ -726,71 +765,103 @@ function CrUpdateCell({ crNumber, canEdit }: { crNumber: string; canEdit: boolea
       toast.success("Update added");
       setText("");
       qc.invalidateQueries({ queryKey: ["cr-updates", crNumber] });
+      qc.invalidateQueries({ queryKey: ["latest-cr-updates"] });
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : String(e)),
   });
 
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <MessageSquarePlus className="size-3.5 mr-1" /> Add Update
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Updates — {crNumber}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          {canEdit && (
-            <div className="flex items-center gap-2">
-              <Input
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder="Add a comment…"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && text.trim() && !submit.isPending) submit.mutate();
-                }}
-              />
-              <Button
-                size="sm"
-                className="shrink-0"
-                disabled={!text.trim() || submit.isPending}
-                onClick={() => submit.mutate()}
-              >
-                {submit.isPending ? "Saving…" : "Submit"}
-              </Button>
-            </div>
-          )}
+  const entries = updates.data ?? [];
 
-          <div className="max-h-80 overflow-y-auto">
-            {updates.isLoading ? (
-              <div className="text-sm text-muted-foreground text-center py-6">Loading…</div>
-            ) : (updates.data ?? []).length === 0 ? (
-              <div className="text-sm text-muted-foreground text-center py-6">
-                No updates posted yet.
-              </div>
-            ) : (
-              <ol className="relative border-l border-border ml-2 space-y-4">
-                {(updates.data ?? []).map((u) => (
-                  <li key={u.id} className="ml-5">
-                    <span className="absolute -left-1.5 size-3 rounded-full ring-2 ring-background bg-primary" />
-                    <div className="flex items-baseline gap-3">
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {fmtDateTime(u.created_at)}
-                      </span>
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {u.created_by}
-                      </span>
-                    </div>
-                    <div className="text-sm mt-0.5">{u.update_text}</div>
-                  </li>
-                ))}
-              </ol>
-            )}
+  const HistoryList = ({ empty }: { empty: string }) =>
+    updates.isLoading ? (
+      <div className="text-base text-muted-foreground text-center py-6">Loading…</div>
+    ) : entries.length === 0 ? (
+      <div className="text-base text-muted-foreground text-center py-6">{empty}</div>
+    ) : (
+      <ol className="relative border-l-2 border-border ml-2 space-y-5">
+        {entries.map((u) => (
+          <li key={u.id} className="ml-5">
+            <span className="absolute -left-[7px] size-3 rounded-full ring-2 ring-background bg-primary" />
+            <div className="flex items-baseline gap-3">
+              <span className="text-sm text-muted-foreground tabular-nums">
+                {fmtDateTime(u.created_at)}
+              </span>
+              <span className="text-sm font-medium text-muted-foreground">{u.created_by}</span>
+            </div>
+            <div className="text-base mt-1 whitespace-pre-wrap break-words">{u.update_text}</div>
+          </li>
+        ))}
+      </ol>
+    );
+
+  return (
+    <>
+      <HoverCard open={hoverOpen} onOpenChange={setHoverOpen} openDelay={200}>
+        <HoverCardTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-1 max-w-48 text-left text-xs hover:underline"
+            onClick={() => setDialogOpen(true)}
+          >
+            <History className="size-3 shrink-0 text-muted-foreground" />
+            <span className="truncate">
+              {latestUpdate?.update_text || (canEdit ? "Add update…" : "—")}
+            </span>
+          </button>
+        </HoverCardTrigger>
+
+        <HoverCardContent className="w-[28rem] p-5">
+          <div className="text-base font-semibold mb-3">Updates history</div>
+          <div className="max-h-96 overflow-y-auto pr-1">
+            <HistoryList empty="No updates yet." />
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </HoverCardContent>
+      </HoverCard>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Updates — {crNumber}</DialogTitle>
+          </DialogHeader>
+
+          <div className="text-base text-muted-foreground space-y-1">
+            <div>
+              <span className="font-medium text-foreground">Title:</span> {title ?? "—"}
+            </div>
+            <div>
+              <span className="font-medium text-foreground">Workflow Status:</span>{" "}
+              {workflowStatus ?? "—"}
+            </div>
+          </div>
+
+          <div className="space-y-5">
+            {canEdit && (
+              <div className="flex items-center gap-3">
+                <Input
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="Add a comment…"
+                  className="h-11 text-base md:text-base"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && text.trim() && !submit.isPending) submit.mutate();
+                  }}
+                />
+                <Button
+                  className="shrink-0 h-11 text-base"
+                  disabled={!text.trim() || submit.isPending}
+                  onClick={() => submit.mutate()}
+                >
+                  {submit.isPending ? "Saving…" : "Submit"}
+                </Button>
+              </div>
+            )}
+
+            <div className="max-h-[28rem] overflow-y-auto pr-1">
+              <HistoryList empty="No updates posted yet." />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
