@@ -68,10 +68,10 @@ function TestCaseUploadPage() {
 
   if (userLoading || !canAccess) return null;
 
-  return <TestCaseUploadView />;
+  return <TestCaseUploadView isAdmin={isAdmin} />;
 }
 
-function TestCaseUploadView() {
+function TestCaseUploadView({ isAdmin }: { isAdmin: boolean }) {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [uploadTarget, setUploadTarget] = useState<string | null>(null);
@@ -151,7 +151,12 @@ function TestCaseUploadView() {
     <AppShell>
       <PageHeader
         title="Test Case Upload"
-        description="Upload test cases (Excel) for any CR. Every upload replaces the CR's current set outright — there's no version history. Once you're happy with what's uploaded, submit it for approval."
+        description={
+          (isAdmin
+            ? "Upload test cases (Excel) for any CR."
+            : "Your bucket — CRs an ITPM or PMO has assigned to you from CR Allocation.") +
+          " Every upload replaces the CR's current set outright — there's no version history. Once you're happy with what's uploaded, submit it for approval."
+        }
       />
       <PageBody>
         <Card>
@@ -177,6 +182,7 @@ function TestCaseUploadView() {
                   <TableHead>Application</TableHead>
                   <TableHead>BA</TableHead>
                   <TableHead>ITPM</TableHead>
+                  {isAdmin && <TableHead>Tester</TableHead>}
                   <TableHead>Current Status</TableHead>
                   <TableHead>Test Case Status</TableHead>
                   <TableHead>Tested</TableHead>
@@ -208,6 +214,7 @@ function TestCaseUploadView() {
                       <TableCell>{c.application}</TableCell>
                       <TableCell>{c.ba ?? "—"}</TableCell>
                       <TableCell>{c.itpm ?? "—"}</TableCell>
+                      {isAdmin && <TableCell>{c.tester ?? "—"}</TableCell>}
                       <TableCell className="text-xs text-muted-foreground">
                         {c.workflow_status}
                       </TableCell>
@@ -268,8 +275,13 @@ function TestCaseUploadView() {
                 })}
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
-                      No CRs.
+                    <TableCell
+                      colSpan={isAdmin ? 11 : 10}
+                      className="text-center py-12 text-muted-foreground"
+                    >
+                      {isAdmin
+                        ? "No CRs."
+                        : "Nothing in your bucket yet — an ITPM or PMO assigns CRs to you from CR Allocation."}
                     </TableCell>
                   </TableRow>
                 )}

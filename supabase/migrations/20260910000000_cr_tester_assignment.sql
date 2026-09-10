@@ -1,0 +1,17 @@
+-- =========== Test Case Management — per-CR Tester assignment ===========
+-- Adds a Tester "bucket" concept: crs.tester holds the Tester currently
+-- responsible for a CR's testing, same free-text single-assignee shape as
+-- the existing ba/itpm columns (no FK — matches their convention).
+--
+-- Lifecycle, driven from application code (src/lib/cr-allocation.functions.ts,
+-- src/lib/test-cases.functions.ts), not enforced here:
+--   - NULL: needs a tester — visible in CR Allocation for ITPM/PMO (scoped
+--     to their user_management.spoc_applications, same mechanism already
+--     used for ITPM/BA claiming) or Admin to assign.
+--   - set: visible in that Tester's bucket (Test Case Upload screen) and,
+--     per this change, only that Tester (or Admin) may upload/submit test
+--     cases or update execution status for the CR.
+--   - cleared back to NULL by approveTestCases once the BA/ITPM/SPOC
+--     approver approves the CR's test cases — the CR then reappears in CR
+--     Allocation's tester pool.
+ALTER TABLE public.crs ADD COLUMN IF NOT EXISTS tester text;

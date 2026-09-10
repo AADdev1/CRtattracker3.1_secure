@@ -1,7 +1,12 @@
 // Test Case Management — Tester upload + BA/ITPM approver review.
 //
-// No per-tester CR assignment: any Tester can upload test cases for any CR
-// (a shared pool, unlike every other relation-scoped feature in this app).
+// Per-tester CR assignment (crs.tester, assigned via CR Allocation — see
+// cr-allocation.functions.ts's assignTester): a Tester only sees, and only
+// acts on, CRs assigned to them (assertAssignedTesterForCr below); Admin
+// keeps the app-wide "read-only everywhere" oversight bypass. Assignment
+// lasts through the whole testing cycle — upload, submit, approval, and
+// execution — and is released back to null (reappearing in CR Allocation's
+// needs-a-tester pool) once every test case has a final execution outcome.
 // No versioning/audit history: re-uploading a CR's test cases deletes the
 // existing rows and inserts the new set fresh at 'Pending' — the current
 // rows are the only rows that ever exist for a CR.
@@ -72,17 +77,21 @@ export const getTestCaseCompletionByCr = createServerFn({ method: "GET" }).handl
   }));
 });
 
+// Tester sees only their own bucket — CRs with crs.tester = them (see
+// cr-allocation.functions.ts's assignTester); Admin keeps the app-wide
+// "read-only everywhere" baseline and sees every CR regardless of
+// assignment, for oversight.
 export const listAllCrsForTesting = createServerFn({ method: "GET" }).handler(async () => {
   assertFeatureEnabled("testing");
-  const { isAdmin, role } = await requireSessionUser();
+  const { isAdmin, userName, role } = await requireSessionUser();
   if (!isAdmin && role !== "Tester")
     throw new Error("Forbidden: only Testers can view this screen");
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const [{ data: crs, error: crErr }, { data: testCases, error: tcErr }] = await Promise.all([
+  const [{ data: crsRaw, error: crErr }, { data: testCases, error: tcErr }] = await Promise.all([
     supabaseAdmin
       .from("crs")
-      .select("cr_number, title, application, ba, itpm, workflow_status, is_dropped")
+      .select("cr_number, title, application, ba, itpm, tester, workflow_status, is_dropped")
       .order("cr_number"),
     supabaseAdmin
       .from("test_cases")
@@ -92,6 +101,8 @@ export const listAllCrsForTesting = createServerFn({ method: "GET" }).handler(as
   ]);
   if (crErr) throw new Error(crErr.message);
   if (tcErr) throw new Error(tcErr.message);
+
+  const crs = isAdmin ? crsRaw : (crsRaw ?? []).filter((c) => c.tester === userName);
 
   const statusByCr = new Map<string, string>();
   const countByCr = new Map<string, number>();
@@ -127,8 +138,34 @@ export const listAllCrsForTesting = createServerFn({ method: "GET" }).handler(as
   }));
 });
 
-// Tester (or Admin) only. Deletes any existing rows for the CR and inserts
-// the new set fresh — a full re-upload replaces the batch outright.
+// A caller passes if they're the CR's assigned Tester (crs.tester — see
+// cr-allocation.functions.ts's assignTester), or Admin. Shared by every
+// Tester-side write below, so a CR's bucket assignment is a real ownership
+// boundary rather than just a filtered view — the "any Tester, shared
+// pool" model this file used to document no longer applies once a CR has
+// an assigned Tester.
+async function assertAssignedTesterForCr(
+  supabaseAdmin: SupabaseClient<Database>,
+  crNumber: string,
+  userName: string,
+  isAdmin: boolean,
+): Promise<void> {
+  if (isAdmin) return;
+  const { data: cr, error } = await supabaseAdmin
+    .from("crs")
+    .select("tester")
+    .eq("cr_number", crNumber)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!cr) throw new Error("CR not found");
+  if (cr.tester !== userName) {
+    throw new Error("Forbidden: this CR is not assigned to you");
+  }
+}
+
+// Tester (or Admin) only, and only the Tester this CR is assigned to (see
+// assertAssignedTesterForCr). Deletes any existing rows for the CR and
+// inserts the new set fresh — a full re-upload replaces the batch outright.
 export const uploadTestCases = createServerFn({ method: "POST" })
   .inputValidator(validated(z.object({ crNumber: text, rows: z.array(testCaseUploadRowSchema) })))
   .handler(async ({ data }) => {
@@ -141,6 +178,7 @@ export const uploadTestCases = createServerFn({ method: "POST" })
     assertPayloadSizeOk(data.rows);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await assertAssignedTesterForCr(supabaseAdmin, data.crNumber, userName, isAdmin);
 
     const { data: cr, error: crErr } = await supabaseAdmin
       .from("crs")
@@ -200,16 +238,18 @@ export const uploadTestCases = createServerFn({ method: "POST" })
     return { ok: true as const, count: insertRows.length };
   });
 
-// Tester (or Admin) only. Only rows currently Pending move to Submitted —
-// mirrors "tester can upload test cases for any pending CR."
+// Tester (or Admin) only, and only the Tester this CR is assigned to (see
+// assertAssignedTesterForCr). Only rows currently Pending move to
+// Submitted.
 export const submitTestCases = createServerFn({ method: "POST" })
   .inputValidator(validated(z.object({ crNumber: text })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
-    const { isAdmin, role } = await requireSessionUser();
+    const { userName, isAdmin, role } = await requireSessionUser();
     if (!isAdmin && role !== "Tester")
       throw new Error("Forbidden: only Testers can submit test cases");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await assertAssignedTesterForCr(supabaseAdmin, data.crNumber, userName, isAdmin);
     const { data: updated, error } = await supabaseAdmin
       .from("test_cases")
       .update({ status: "Submitted" } as never)
@@ -224,16 +264,28 @@ export const submitTestCases = createServerFn({ method: "POST" })
   });
 
 // Tester only — deliberately no Admin bypass, unlike every other function
-// in this file. Only once the CR's test cases are Approved — per-row
-// execution outcome, separate from the approval workflow status above.
-// Defect Raised requires a defect id; any other status clears it.
+// in this file — and only the Tester this CR is assigned to (see
+// assertAssignedTesterForCr; called with isAdmin hardcoded false, since
+// there's no Admin bypass to extend here). Only once the CR's test cases
+// are Approved — per-row execution outcome, separate from the approval
+// workflow status above. Defect Raised requires a defect id; any other
+// status clears it.
+//
+// Once every row for the CR has a final outcome (Tested or Defect Raised —
+// i.e. nothing left at the 'Pending' execution default), crs.tester is
+// released back to null: the Tester's work on this CR is done, and it
+// reappears in CR Allocation's needs-a-tester pool (assignTester,
+// cr-allocation.functions.ts). A later defect-import reset
+// (defect-import.ts, closing a referenced defect) can put a row back to
+// 'Pending' after that — that's fine; the CR simply sits unassigned in the
+// pool until someone assigns a tester to pick the retest back up.
 export const updateExecutionStatus = createServerFn({ method: "POST" })
   .inputValidator(
     validated(z.object({ testCaseId: text, executionStatus: text, defectId: optionalText })),
   )
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
-    const { role } = await requireSessionUser();
+    const { userName, role } = await requireSessionUser();
     if (role !== "Tester") {
       throw new Error("Forbidden: only Testers can update execution status");
     }
@@ -244,7 +296,7 @@ export const updateExecutionStatus = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error: fetchErr } = await supabaseAdmin
       .from("test_cases")
-      .select("status")
+      .select("status, cr_number")
       .eq("id", data.testCaseId)
       .maybeSingle();
     if (fetchErr) throw new Error(fetchErr.message);
@@ -252,6 +304,7 @@ export const updateExecutionStatus = createServerFn({ method: "POST" })
     if (row.status !== "Approved") {
       throw new Error("Execution status can only be set once the CR's test cases are Approved");
     }
+    await assertAssignedTesterForCr(supabaseAdmin, row.cr_number, userName, false);
 
     const { error } = await supabaseAdmin
       .from("test_cases")
@@ -265,6 +318,22 @@ export const updateExecutionStatus = createServerFn({ method: "POST" })
       } as never)
       .eq("id", data.testCaseId);
     if (error) throw new Error(error.message);
+
+    const { data: remaining, error: remainingErr } = await supabaseAdmin
+      .from("test_cases")
+      .select("id")
+      .eq("cr_number", row.cr_number)
+      .eq("execution_status", "Pending")
+      .limit(1);
+    if (remainingErr) throw new Error(remainingErr.message);
+    if (!remaining || remaining.length === 0) {
+      const { error: releaseErr } = await supabaseAdmin
+        .from("crs")
+        .update({ tester: null } as never)
+        .eq("cr_number", row.cr_number);
+      if (releaseErr) throw new Error(releaseErr.message);
+    }
+
     return { ok: true as const };
   });
 
