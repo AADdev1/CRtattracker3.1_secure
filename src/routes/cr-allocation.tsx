@@ -12,7 +12,15 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { useAppUser } from "@/lib/app-user";
-import { listUnassignedCrs, listStaffByRole, assignCrField, claimCr } from "@/lib/cr-allocation.functions";
+import {
+  listUnassignedCrs,
+  listStaffByRole,
+  assignCrField,
+  claimCr,
+  listCrsNeedingTester,
+  listTestersForAssignment,
+  assignTester,
+} from "@/lib/cr-allocation.functions";
 
 export const Route = createFileRoute("/cr-allocation")({
   head: () => ({ meta: [{ title: "CR Allocation · Kpisavvy" }] }),
@@ -29,6 +37,15 @@ interface AllocationCr {
   workflow_status: string | null;
   ba: string | null;
   itpm: string | null;
+}
+
+interface TesterAllocationCr {
+  cr_number: string;
+  title: string | null;
+  application: string | null;
+  severity: string | null;
+  workflow_status: string | null;
+  tester: string | null;
 }
 
 function CrAllocationPage() {
@@ -52,6 +69,9 @@ function CrAllocationPage() {
 
 function CrAllocationView({ isFullView, role }: { isFullView: boolean; role: "BA" | "ITPM" | "PMO" | null }) {
   const qc = useQueryClient();
+  // Tester assignment is ITPM/PMO/Admin — BA has no role in it. isFullView
+  // already covers Admin + PMO, so this just adds ITPM alongside them.
+  const showTesterAssignment = isFullView || role === "ITPM";
 
   const crs = useQuery({
     queryKey: ["cr-allocation"],
@@ -202,7 +222,116 @@ function CrAllocationView({ isFullView, role }: { isFullView: boolean; role: "BA
             </Table>
           </CardContent>
         </Card>
+
+        {showTesterAssignment && <TesterAssignmentCard />}
       </PageBody>
     </AppShell>
+  );
+}
+
+// Tester assignment — a distinct pool from the ITPM/BA table above: CRs
+// with no crs.tester yet (never assigned, or just released back to the
+// pool once a Tester finished executing their test cases — see
+// updateExecutionStatus, test-cases.functions.ts). ITPM/PMO see only CRs
+// whose application is in their own spoc_applications (server-enforced in
+// listCrsNeedingTester/assignTester); Admin sees and can assign every CR.
+function TesterAssignmentCard() {
+  const qc = useQueryClient();
+
+  const crs = useQuery({
+    queryKey: ["cr-allocation-needs-tester"],
+    queryFn: async () => (await listCrsNeedingTester()) as unknown as TesterAllocationCr[],
+  });
+
+  const testers = useQuery({
+    queryKey: ["cr-allocation-testers"],
+    queryFn: () => listTestersForAssignment(),
+  });
+
+  const assign = useMutation({
+    mutationFn: (v: { crNumber: string; testerUserName: string }) => assignTester({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cr-allocation-needs-tester"] });
+      toast.success("Assigned to tester's bucket.");
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : String(e)),
+  });
+
+  const rows = crs.data ?? [];
+
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <div className="px-4 pt-4 text-sm font-medium">Assign Testers</div>
+        <div className="px-4 pb-2 text-sm text-muted-foreground">
+          CRs with no tester assigned yet — pick a tester to move the CR into their bucket.
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>CR Number</TableHead>
+              <TableHead>Title</TableHead>
+              <TableHead>Application</TableHead>
+              <TableHead>Severity</TableHead>
+              <TableHead>Current Status</TableHead>
+              <TableHead className="w-48">Tester</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((c) => {
+              const eligibleTesters = (testers.data ?? []).filter(
+                (t) => !!c.application && t.spocApplications.includes(c.application),
+              );
+              return (
+                <TableRow key={c.cr_number}>
+                  <TableCell>
+                    <Link
+                      to="/crs/$crNumber"
+                      params={{ crNumber: c.cr_number }}
+                      className="text-primary hover:underline font-medium"
+                    >
+                      {c.cr_number}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="max-w-sm truncate">{c.title}</TableCell>
+                  <TableCell>{c.application}</TableCell>
+                  <TableCell>{c.severity}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {c.workflow_status}
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      onValueChange={(v) => assign.mutate({ crNumber: c.cr_number, testerUserName: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            eligibleTesters.length === 0 ? "No eligible tester" : "Pick a tester…"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {eligibleTesters.map((t) => (
+                          <SelectItem key={t.user_name} value={t.user_name}>
+                            {t.user_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  No CRs need a tester right now.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }

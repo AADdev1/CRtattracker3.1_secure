@@ -222,6 +222,7 @@ export type Database = {
           s29_live_and_closed: string | null
           s30_issue_in_production: string | null
           severity: string | null
+          tester: string | null
           testing_percentage: number | null
           title: string | null
           uat_signoff_awaited_by_ba: string | null
@@ -310,6 +311,7 @@ export type Database = {
           s29_live_and_closed?: string | null
           s30_issue_in_production?: string | null
           severity?: string | null
+          tester?: string | null
           testing_percentage?: number | null
           title?: string | null
           uat_signoff_awaited_by_ba?: string | null
@@ -398,6 +400,7 @@ export type Database = {
           s29_live_and_closed?: string | null
           s30_issue_in_production?: string | null
           severity?: string | null
+          tester?: string | null
           testing_percentage?: number | null
           title?: string | null
           uat_signoff_awaited_by_ba?: string | null
