@@ -41,6 +41,25 @@ import {
   bulkDropCrs,
 } from "@/lib/crs-admin.functions";
 
+// workflow_status is inconsistently formatted in live data (CSV import
+// sometimes writes the raw CMS code with underscores, sometimes the
+// space-separated label) — same both-format defensive matching already
+// used in deployment.functions.ts's DEPLOYMENT_TERMINAL_WORKFLOW_STATUSES,
+// duplicated here rather than imported since this is CR Size Management-
+// local display logic, not a deployment-planning concern. A CR at any of
+// these has already gone live (or been closed out) — resizing it has no
+// remaining purpose, so it's hidden the same way a dropped CR is.
+const CLOSED_WORKFLOW_STATUSES = new Set([
+  "28_Deployed in Production",
+  "28 Deployed in Production",
+  "28_Tech Go Delpoyed in Production",
+  "28 Tech Go - Deployed in Production",
+  "29_Live and Closed",
+  "29 Live and Closed",
+  "30_Issue in production",
+  "30 Issue in Production",
+]);
+
 export const Route = createFileRoute("/cr-sizes")({
   head: () => ({ meta: [{ title: "CR Size Management · Kpisavvy" }] }),
   component: CrSizesPage,
@@ -125,6 +144,7 @@ function CrSizesView({ canEdit }: { canEdit: boolean }) {
 
   const filtered = (crs.data ?? [])
     .filter((c) => !c.is_dropped)
+    .filter((c) => !c.workflow_status || !CLOSED_WORKFLOW_STATUSES.has(c.workflow_status))
     .filter((c) => {
       if (!q) return true;
       const t = q.toLowerCase();
@@ -156,7 +176,7 @@ function CrSizesView({ canEdit }: { canEdit: boolean }) {
     <AppShell>
       <PageHeader
         title="CR Size Management"
-        description="Manually assign CR Size and Notes, or drop CRs from KPI calculation. Dropped CRs are hidden from this list and excluded from KPI calculation, until a later CSV import reports one back in an active (non-dropped) status."
+        description="Manually assign CR Size and Notes, or drop CRs from KPI calculation. Dropped CRs are hidden from this list and excluded from KPI calculation, until a later CSV import reports one back in an active (non-dropped) status. CRs at a closed/terminal status (Deployed in Production, Live and Closed, Issue in Production) are hidden too — resizing them has no remaining purpose — but they stay counted in KPI calculation."
       />
       <PageBody>
         <Card>
