@@ -535,7 +535,7 @@ function CrPlannerView({ canEdit }: { canEdit: boolean }) {
                   <SortHead
                     k="title"
                     label="Title"
-                    className="sticky left-[110px] z-20 w-[220px] min-w-[220px] bg-card border-r whitespace-normal"
+                    className="sticky left-[110px] z-20 w-[88px] min-w-[88px] bg-card border-r whitespace-normal"
                   />
 
                   <SortHead
@@ -866,7 +866,7 @@ function PlannerGridRowView({
       </TableCell>
 
       {/* Title */}
-      <TableCell className="sticky left-[110px] z-10 w-[220px] min-w-[220px] bg-card border-r whitespace-normal break-words align-top">
+      <TableCell className="sticky left-[110px] z-10 w-[88px] min-w-[88px] bg-card border-r whitespace-normal break-words align-top">
         {row.title}
       </TableCell>
 
