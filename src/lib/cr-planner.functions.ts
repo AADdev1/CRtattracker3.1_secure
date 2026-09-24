@@ -11,7 +11,10 @@
 // Visibility is scoped to assigned CRs: listActiveCrsForPlanner (ITPM-only)
 // and listPlannerGrid only show CRs where the caller is the CR's assigned
 // itpm. Admin keeps the app-wide "read-only everywhere" baseline on the
-// planner grid and sees every entry, unfiltered.
+// planner grid and sees every entry regardless of itpm. Both also exclude
+// CRs at a closed/terminal workflow status (PLANNER_EXCLUDED_WORKFLOW_STATUSES)
+// — for listPlannerGrid this applies even to Admin, since a closed CR has
+// nothing left to plan.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSessionUser } from "@/lib/gate.functions";
@@ -102,6 +105,10 @@ export const listActiveCrsForPlanner = createServerFn({ method: "GET" }).handler
 // already used throughout this codebase, e.g. crs.tsx's defectStats map).
 // ITPM only sees entries for CRs where they're the assigned ITPM; Admin
 // keeps the app-wide "read-only everywhere" baseline and sees every entry.
+// A CR that's reached a closed/terminal status (PLANNER_EXCLUDED_WORKFLOW_STATUSES
+// — same set listActiveCrsForPlanner uses to block new additions) is
+// hidden here too, even if it was added to the planner earlier while still
+// active — there's nothing left to plan once a CR has gone live or closed.
 export const listPlannerGrid = createServerFn({ method: "GET" }).handler(async () => {
   const { userName, isAdmin } = await assertPlannerViewer();
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -121,9 +128,13 @@ export const listPlannerGrid = createServerFn({ method: "GET" }).handler(async (
 
   const crByNumber = new Map((crs ?? []).map((c) => [c.cr_number, c]));
 
-  const visible = isAdmin
+  const visible = (isAdmin
     ? planner
-    : planner.filter((p) => crByNumber.get(p.cr_number)?.itpm === userName);
+    : planner.filter((p) => crByNumber.get(p.cr_number)?.itpm === userName)
+  ).filter((p) => {
+    const status = crByNumber.get(p.cr_number)?.workflow_status;
+    return !status || !PLANNER_EXCLUDED_WORKFLOW_STATUSES.has(status);
+  });
 
   return visible.map((p) => {
     const cr = crByNumber.get(p.cr_number);
