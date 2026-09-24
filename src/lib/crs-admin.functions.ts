@@ -39,7 +39,7 @@ export const listAllCrsForSizeManagement = createServerFn({ method: "GET" }).han
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("crs")
-    .select("cr_number, title, application, cr_size, manual_notes, is_dropped, ba, itpm")
+    .select("cr_number, title, application, cr_size, manual_notes, is_dropped, ba, itpm, workflow_status")
     .order("cr_number");
   if (error) throw new Error(error.message);
 
