@@ -23,6 +23,7 @@ export type Database = {
           dev_end_date: string | null
           dev_resource: string | null
           dev_start_date: string | null
+          final_cr_observation_date: string | null
           modified_at: string
           modified_by: string | null
           planner_id: string
@@ -31,6 +32,7 @@ export type Database = {
           sit_effort: number | null
           sit_start_date: string | null
           uat_date: string | null
+          uat_sign_off_date: string | null
         }
         Insert: {
           cr_number: string
@@ -40,6 +42,7 @@ export type Database = {
           dev_end_date?: string | null
           dev_resource?: string | null
           dev_start_date?: string | null
+          final_cr_observation_date?: string | null
           modified_at?: string
           modified_by?: string | null
           planner_id?: string
@@ -48,6 +51,7 @@ export type Database = {
           sit_effort?: number | null
           sit_start_date?: string | null
           uat_date?: string | null
+          uat_sign_off_date?: string | null
         }
         Update: {
           cr_number?: string
@@ -57,6 +61,7 @@ export type Database = {
           dev_end_date?: string | null
           dev_resource?: string | null
           dev_start_date?: string | null
+          final_cr_observation_date?: string | null
           modified_at?: string
           modified_by?: string | null
           planner_id?: string
@@ -65,6 +70,7 @@ export type Database = {
           sit_effort?: number | null
           sit_start_date?: string | null
           uat_date?: string | null
+          uat_sign_off_date?: string | null
         }
         Relationships: [
           {
