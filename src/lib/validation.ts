@@ -10,8 +10,8 @@ import { z } from "zod";
 export const text = z.string().trim().max(500);
 export const optionalText = z.string().trim().max(500).nullable().optional();
 
-// Wraps a zod schema as an inputValidator function — createServerFn's
-// .inputValidator() expects a plain (data) => output function (this
+// Wraps a zod schema as a validator function — createServerFn's
+// .validator() expects a plain (data) => output function (this
 // version of @tanstack/react-start has no built-in standard-schema
 // support), so every call site does `validated(schema)` instead of the
 // previous identity `(data) => data`. Typed with z.input<S> rather than

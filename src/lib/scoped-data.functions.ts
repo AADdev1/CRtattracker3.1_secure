@@ -80,7 +80,7 @@ async function loadScopedCrs(
 }
 
 export const getScopedCrs = createServerFn({ method: "GET" })
-  .inputValidator(validateScopedInput)
+  .validator(validateScopedInput)
   .handler(async ({ data }) => {
     const session = await requireSessionUser();
     assertHasRoleOrAdmin(session);
@@ -116,7 +116,7 @@ function roleAllowedForRelation(role: string | undefined, relation: CrRelation):
 }
 
 export const getScopedKpiResults = createServerFn({ method: "GET" })
-  .inputValidator(validateScopedInput)
+  .validator(validateScopedInput)
   .handler(async ({ data }) => {
     const session = await requireSessionUser();
     assertHasRoleOrAdmin(session);
@@ -158,7 +158,7 @@ export const getScopedKpiResults = createServerFn({ method: "GET" })
   });
 
 export const getScopedDefects = createServerFn({ method: "GET" })
-  .inputValidator(validateScopedInput)
+  .validator(validateScopedInput)
   .handler(async ({ data }) => {
     const session = await requireSessionUser();
     assertHasRoleOrAdmin(session);

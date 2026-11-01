@@ -184,7 +184,7 @@ export const listPlannedDeploymentDates = createServerFn({ method: "GET" }).hand
 // hard error for the whole batch) — the route surfaces `skipped` as a
 // "already exists in planner" message per the spec.
 export const addCrsToPlanner = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ crNumbers: z.array(text).max(1000) })))
+  .validator(validated(z.object({ crNumbers: z.array(text).max(1000) })))
   .handler(async ({ data }) => {
     const { userName } = await assertPlannerActor();
     if (data.crNumbers.length === 0) throw new Error("Select at least one CR");
@@ -217,7 +217,7 @@ export const addCrsToPlanner = createServerFn({ method: "POST" })
 const optionalNumber = z.number().nullable().optional();
 
 export const updatePlannerEntry = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     validated(
       z.object({
         crNumber: text,
@@ -324,7 +324,7 @@ export const updatePlannerEntry = createServerFn({ method: "POST" })
 // rule as listPlannerGrid: ITPM only sees history for CRs where they're the
 // assigned ITPM, Admin sees everything.
 export const listPlannerRemarks = createServerFn({ method: "GET" })
-  .inputValidator(validated(z.object({ crNumber: text })))
+  .validator(validated(z.object({ crNumber: text })))
   .handler(async ({ data }) => {
     const { userName, isAdmin } = await assertPlannerViewer();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -353,7 +353,7 @@ export const listPlannerRemarks = createServerFn({ method: "GET" })
 // Adds a remark to the history and mirrors it onto cr_planner.remarks as
 // the latest value. ITPM only, same as every other planner write.
 export const addPlannerRemark = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ crNumber: text, remarkText: text })))
+  .validator(validated(z.object({ crNumber: text, remarkText: text })))
   .handler(async ({ data }) => {
     const { userName } = await assertPlannerActor();
     const remarkText = data.remarkText.trim();

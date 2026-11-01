@@ -25,7 +25,7 @@ async function assertCrUpdateWriteAccess() {
 // Full history for a CR, newest first — powers the CR Detail page's
 // Updates card.
 export const listUpdatesByCr = createServerFn({ method: "GET" })
-  .inputValidator(validated(z.object({ crNumber: textSchema })))
+  .validator(validated(z.object({ crNumber: textSchema })))
   .handler(async ({ data }) => {
     assertHasRoleOrAdmin(await requireSessionUser());
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -69,7 +69,7 @@ export const getLatestCrUpdates = createServerFn({ method: "GET" }).handler(asyn
 });
 
 export const addCrUpdate = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ crNumber: textSchema, updateText: textSchema })))
+  .validator(validated(z.object({ crNumber: textSchema, updateText: textSchema })))
   .handler(async ({ data }) => {
     const { userName } = await assertCrUpdateWriteAccess();
     const text = data.updateText.trim();
