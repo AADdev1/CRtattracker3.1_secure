@@ -380,11 +380,11 @@ function CrPlannerView({ canEdit }: { canEdit: boolean }) {
 
         "UAT Date": fmtDate(r.uatDate),
 
-        "UAT Sign Off Date": fmtDate(r.uatSignOffDate),
-
         "Final CR Observation Date": fmtDate(
           r.finalCrObservationDate,
         ),
+
+        "UAT Sign Off Date": fmtDate(r.uatSignOffDate),
 
         "PROD Date": fmtDate(r.prodDate),
 
@@ -576,13 +576,13 @@ function CrPlannerView({ canEdit }: { canEdit: boolean }) {
                   />
 
                   <SortHead
-                    k="uatSignOffDate"
-                    label="UAT Sign Off Date"
+                    k="finalCrObservationDate"
+                    label="Final CR Observation Date"
                   />
 
                   <SortHead
-                    k="finalCrObservationDate"
-                    label="Final CR Observation Date"
+                    k="uatSignOffDate"
+                    label="UAT Sign Off Date"
                   />
 
                   <SortHead
@@ -1114,74 +1114,6 @@ function PlannerGridRowView({
           : "—"}
       </TableCell>
 
-      {/* NEW: UAT Sign Off Date */}
-      <TableCell>
-        {canEdit ? (
-          <div className="flex items-center gap-1">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-32 justify-start font-normal"
-                >
-                  {uatSignOffDate
-                    ? format(
-                        uatSignOffDate,
-                        "dd-MMM-yyyy",
-                      )
-                    : "—"}
-                </Button>
-              </PopoverTrigger>
-
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={uatSignOffDate}
-                  onSelect={(d) => {
-                    setUatSignOffDate(d);
-
-                    update.mutate({
-                      uatSignOffDate: d
-                        ? format(
-                            d,
-                            "yyyy-MM-dd",
-                          )
-                        : null,
-                    });
-                  }}
-                />
-              </PopoverContent>
-            </Popover>
-
-            {uatSignOffDate && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-6 shrink-0"
-                title="Clear date"
-                onClick={() => {
-                  setUatSignOffDate(undefined);
-
-                  update.mutate({
-                    uatSignOffDate: null,
-                  });
-                }}
-              >
-                <X className="size-3" />
-              </Button>
-            )}
-          </div>
-        ) : uatSignOffDate ? (
-          format(
-            uatSignOffDate,
-            "dd-MMM-yyyy",
-          )
-        ) : (
-          "—"
-        )}
-      </TableCell>
-
       {/* NEW: Final CR Observation Date */}
       <TableCell>
         {canEdit ? (
@@ -1248,6 +1180,74 @@ function PlannerGridRowView({
         ) : finalCrObservationDate ? (
           format(
             finalCrObservationDate,
+            "dd-MMM-yyyy",
+          )
+        ) : (
+          "—"
+        )}
+      </TableCell>
+
+      {/* NEW: UAT Sign Off Date */}
+      <TableCell>
+        {canEdit ? (
+          <div className="flex items-center gap-1">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-32 justify-start font-normal"
+                >
+                  {uatSignOffDate
+                    ? format(
+                        uatSignOffDate,
+                        "dd-MMM-yyyy",
+                      )
+                    : "—"}
+                </Button>
+              </PopoverTrigger>
+
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={uatSignOffDate}
+                  onSelect={(d) => {
+                    setUatSignOffDate(d);
+
+                    update.mutate({
+                      uatSignOffDate: d
+                        ? format(
+                            d,
+                            "yyyy-MM-dd",
+                          )
+                        : null,
+                    });
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+
+            {uatSignOffDate && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 shrink-0"
+                title="Clear date"
+                onClick={() => {
+                  setUatSignOffDate(undefined);
+
+                  update.mutate({
+                    uatSignOffDate: null,
+                  });
+                }}
+              >
+                <X className="size-3" />
+              </Button>
+            )}
+          </div>
+        ) : uatSignOffDate ? (
+          format(
+            uatSignOffDate,
             "dd-MMM-yyyy",
           )
         ) : (
