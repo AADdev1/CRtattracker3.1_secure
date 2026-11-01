@@ -69,7 +69,7 @@ async function recordFailedAttempt(
 }
 
 export const signIn = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ email: text, password: text })))
+  .validator(validated(z.object({ email: text, password: text })))
   .handler(async ({ data }) => {
     const email = data.email.trim().toLowerCase();
     if (!email || !data.password) {

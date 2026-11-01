@@ -131,7 +131,7 @@ type ScreenshotRow = Database["public"]["Tables"]["test_result_screenshots"]["Ro
 // require the resolved test case to be Approved before accepting the
 // upload.
 export const uploadScreenshot = createServerFn({ method: "POST" })
-  .inputValidator((raw: unknown) => {
+  .validator((raw: unknown) => {
     if (!(raw instanceof FormData)) throw new Error("Expected multipart form data");
     return raw;
   })
@@ -340,7 +340,7 @@ export const uploadScreenshot = createServerFn({ method: "POST" })
 // case still return (testCaseName: null) rather than vanishing — the UI
 // surfaces these as orphaned instead of hiding them.
 export const getScreenshotsForCr = createServerFn({ method: "GET" })
-  .inputValidator(
+  .validator(
     validated(z.object({ crNumber: text, testCaseIds: z.array(z.string()).optional() })),
   )
   .handler(async ({ data }) => {

@@ -32,7 +32,7 @@ export const listUsers = createServerFn({ method: "GET" }).handler(async () => {
 });
 
 export const createUserAccount = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     (data: {
       email: string;
       password: string;
@@ -85,7 +85,7 @@ export const createUserAccount = createServerFn({ method: "POST" })
   });
 
 export const updateUserFields = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     (data: {
       id: string;
       isAdmin: boolean;
@@ -111,7 +111,7 @@ export const updateUserFields = createServerFn({ method: "POST" })
   });
 
 export const deleteUserAccount = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     await assertAdmin();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

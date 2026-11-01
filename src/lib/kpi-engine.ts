@@ -356,7 +356,7 @@ export const recalculateAllKpis = createServerFn({ method: "POST" }).handler(
  * Recalculate KPIs for a single CR (used after editing CR size or notes).
  */
 export const recalculateForCr = createServerFn({ method: "POST" })
-  .inputValidator(validated(text))
+  .validator(validated(text))
   .handler(async ({ data: crNumber }): Promise<void> => {
     assertHasRoleOrAdmin(await requireSessionUser());
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

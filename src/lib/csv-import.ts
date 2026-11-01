@@ -106,7 +106,7 @@ export interface CsvImportResult {
 }
 
 const importCrRows = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ rows: csvRows })))
+  .validator(validated(z.object({ rows: csvRows })))
   .handler(async ({ data: { rows } }): Promise<CsvImportResult> => {
     const { isAdmin, role, userName } = await requireSessionUser();
     if (!isAdmin && role !== "PMO" && role !== "BA" && role !== "ITPM") {

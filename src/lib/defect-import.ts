@@ -62,7 +62,7 @@ export interface DefectImportResult {
 }
 
 const importDefectRows = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ rows: csvRows })))
+  .validator(validated(z.object({ rows: csvRows })))
   .handler(async ({ data: { rows } }): Promise<DefectImportResult> => {
     const { isAdmin, role } = await requireSessionUser();
     if (!isAdmin && role !== "PMO" && role !== "BA" && role !== "ITPM") {

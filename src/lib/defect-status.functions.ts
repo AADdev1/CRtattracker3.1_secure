@@ -36,7 +36,7 @@ export const listUnmappedDefectStatuses = createServerFn({ method: "GET" }).hand
 });
 
 export const toggleDefectStatusOpen = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ id: text, is_open: z.boolean() })))
+  .validator(validated(z.object({ id: text, is_open: z.boolean() })))
   .handler(async ({ data }) => {
     await assertAdmin();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -49,7 +49,7 @@ export const toggleDefectStatusOpen = createServerFn({ method: "POST" })
   });
 
 export const addDefectStatus = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ status: text })))
+  .validator(validated(z.object({ status: text })))
   .handler(async ({ data }) => {
     await assertAdmin();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -61,7 +61,7 @@ export const addDefectStatus = createServerFn({ method: "POST" })
   });
 
 export const removeDefectStatus = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ id: text })))
+  .validator(validated(z.object({ id: text })))
   .handler(async ({ data }) => {
     await assertAdmin();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

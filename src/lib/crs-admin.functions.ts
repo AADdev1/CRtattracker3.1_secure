@@ -51,7 +51,7 @@ export const listAllCrsForSizeManagement = createServerFn({ method: "GET" }).han
 });
 
 export const updateCrSizeAndNotes = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     validated(z.object({ crNumber: text, cr_size: optionalText, manual_notes: optionalText })),
   )
   .handler(async ({ data }) => {
@@ -82,7 +82,7 @@ export const updateCrSizeAndNotes = createServerFn({ method: "POST" })
   });
 
 export const bulkUpdateCrSize = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ crNumbers, cr_size: text.nullable() })))
+  .validator(validated(z.object({ crNumbers, cr_size: text.nullable() })))
   .handler(async ({ data }) => {
     const { role, userName } = await assertCrEditAccess();
     if (data.crNumbers.length === 0) return { ok: true as const };
@@ -111,7 +111,7 @@ export const bulkUpdateCrSize = createServerFn({ method: "POST" })
   });
 
 export const bulkDropCrs = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ crNumbers })))
+  .validator(validated(z.object({ crNumbers })))
   .handler(async ({ data }) => {
     const { role, userName } = await assertCrEditAccess();
     if (data.crNumbers.length === 0) return { ok: true as const };
@@ -140,7 +140,7 @@ export const bulkDropCrs = createServerFn({ method: "POST" })
   });
 
 export const updateCrWorkflowStatus = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ crNumber: text, dbColumn: text, label: text })))
+  .validator(validated(z.object({ crNumber: text, dbColumn: text, label: text })))
   .handler(async ({ data }) => {
     await assertCrEditAccess();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

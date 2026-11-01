@@ -17,7 +17,7 @@ const REPORTS = {
 export type SecurityReportKind = keyof typeof REPORTS;
 
 export const getSecurityReport = createServerFn({ method: "GET" })
-  .inputValidator((data: { report?: SecurityReportKind }) => ({
+  .validator((data: { report?: SecurityReportKind }) => ({
     report: data.report === "compliance" ? "compliance" : ("vapt" as SecurityReportKind),
   }))
   .handler(async ({ data }) => {

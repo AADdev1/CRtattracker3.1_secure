@@ -167,7 +167,7 @@ async function assertAssignedTesterForCr(
 // assertAssignedTesterForCr). Deletes any existing rows for the CR and
 // inserts the new set fresh — a full re-upload replaces the batch outright.
 export const uploadTestCases = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ crNumber: text, rows: z.array(testCaseUploadRowSchema) })))
+  .validator(validated(z.object({ crNumber: text, rows: z.array(testCaseUploadRowSchema) })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
     const { userName, isAdmin, role } = await requireSessionUser();
@@ -242,7 +242,7 @@ export const uploadTestCases = createServerFn({ method: "POST" })
 // assertAssignedTesterForCr). Only rows currently Pending move to
 // Submitted.
 export const submitTestCases = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ crNumber: text })))
+  .validator(validated(z.object({ crNumber: text })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
     const { userName, isAdmin, role } = await requireSessionUser();
@@ -280,7 +280,7 @@ export const submitTestCases = createServerFn({ method: "POST" })
 // 'Pending' after that — that's fine; the CR simply sits unassigned in the
 // pool until someone assigns a tester to pick the retest back up.
 export const updateExecutionStatus = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     validated(z.object({ testCaseId: text, executionStatus: text, defectId: optionalText })),
   )
   .handler(async ({ data }) => {
@@ -396,7 +396,7 @@ export const listSubmittedForApproval = createServerFn({ method: "GET" }).handle
 // Approver or Admin only — per-row inline edit (auto-save on blur, same UX
 // as manual_notes in cr-sizes.tsx).
 export const updateApproverComment = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ testCaseId: text, comment: text.nullable() })))
+  .validator(validated(z.object({ testCaseId: text, comment: text.nullable() })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
     const { userName, isAdmin, role, isTestCaseApprover, spocApplications } =
@@ -453,7 +453,7 @@ async function assertApproverForCr(
 // Approver or Admin only — every Submitted row for the CR moves to
 // Approved, stamped with who/when.
 export const approveTestCases = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ crNumber: text })))
+  .validator(validated(z.object({ crNumber: text })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
     const { userName, isAdmin, role, isTestCaseApprover, spocApplications } =
@@ -484,7 +484,7 @@ export const approveTestCases = createServerFn({ method: "POST" })
 // Back for Revision. overallComment (if given) fills any row missing its
 // own approver_comments; rows with an existing comment keep it as-is.
 export const sendBackTestCases = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ crNumber: text, overallComment: optionalText })))
+  .validator(validated(z.object({ crNumber: text, overallComment: optionalText })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
     const { userName, isAdmin, role, isTestCaseApprover, spocApplications } =
@@ -529,7 +529,7 @@ export const sendBackTestCases = createServerFn({ method: "POST" })
 // for the test-case review screen — deliberately NOT relation-scoped like
 // getScopedCrs, since any Tester/approver can look at any CR's test cases.
 export const getCrTestingHeader = createServerFn({ method: "GET" })
-  .inputValidator(validated(z.object({ crNumber: text })))
+  .validator(validated(z.object({ crNumber: text })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
     assertHasRoleOrAdmin(await requireSessionUser());
@@ -548,7 +548,7 @@ export const getCrTestingHeader = createServerFn({ method: "GET" })
 // used both by the Tester's read-only "View Status" and the approver's
 // review screen; each route enforces its own authorization on top.
 export const getTestCases = createServerFn({ method: "GET" })
-  .inputValidator(validated(z.object({ crNumber: text })))
+  .validator(validated(z.object({ crNumber: text })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("testing");
     assertHasRoleOrAdmin(await requireSessionUser());

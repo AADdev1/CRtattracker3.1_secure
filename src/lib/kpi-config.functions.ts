@@ -43,7 +43,7 @@ export const listKpiExcludedStatuses = createServerFn({ method: "GET" }).handler
 });
 
 export const saveKpi = createServerFn({ method: "POST" })
-  .inputValidator(validated(kpiFormSchema))
+  .validator(validated(kpiFormSchema))
   .handler(async ({ data: form }) => {
     assertFeatureEnabled("administration");
     const { isAdmin } = await requireSessionUser();
@@ -83,7 +83,7 @@ export const saveKpi = createServerFn({ method: "POST" })
   });
 
 export const deleteKpi = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ id: text })))
+  .validator(validated(z.object({ id: text })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("administration");
     const { isAdmin } = await requireSessionUser();

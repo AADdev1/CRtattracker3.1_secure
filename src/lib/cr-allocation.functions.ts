@@ -85,7 +85,7 @@ export const listStaffByRole = createServerFn({ method: "GET" }).handler(async (
 // Admin/PMO only — assign, reassign, or clear (userName: null) either
 // field on any CR.
 export const assignCrField = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     validated(z.object({ crNumber: text, field: text, userName: optionalText })),
   )
   .handler(async ({ data }) => {
@@ -112,7 +112,7 @@ export const assignCrField = createServerFn({ method: "POST" })
 // field is still empty (atomic conditional update, same pattern as
 // kpi_engine_lock, so two people racing to claim the same CR can't both win).
 export const claimCr = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ crNumber: text, field: text })))
+  .validator(validated(z.object({ crNumber: text, field: text })))
   .handler(async ({ data }) => {
     const { userName, role, spocApplications } = await requireSessionUser();
     if (role !== "ITPM" && role !== "BA") throw new Error("Forbidden");
@@ -198,7 +198,7 @@ export const listTestersForAssignment = createServerFn({ method: "GET" }).handle
 // spoc_applications — same SPOC gate claimCr uses, but assigning someone
 // else rather than self-claiming, since a PMO/ITPM is never the Tester.
 export const assignTester = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ crNumber: text, testerUserName: optionalText })))
+  .validator(validated(z.object({ crNumber: text, testerUserName: optionalText })))
   .handler(async ({ data }) => {
     const { isAdmin, role, spocApplications } = await requireSessionUser();
     if (!isAdmin && role !== "PMO" && role !== "ITPM") throw new Error("Forbidden");

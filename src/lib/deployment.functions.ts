@@ -356,7 +356,7 @@ export const getDeploymentInfoByCr = createServerFn({ method: "GET" }).handler(a
 });
 
 export const getDeploymentScheduleCrs = createServerFn({ method: "GET" })
-  .inputValidator(validated(z.object({ scheduleId: text })))
+  .validator(validated(z.object({ scheduleId: text })))
   .handler(async ({ data }) => {
     assertFeatureEnabled("deployment");
     assertHasRoleOrAdmin(await requireSessionUser());
@@ -394,7 +394,7 @@ export const getDeploymentScheduleCrs = createServerFn({ method: "GET" })
 // ─────────────────────────── Writes ───────────────────────────
 
 export const createDeploymentSchedule = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     validated(z.object({ application: text, deploymentDate: text, remarks: optionalText })),
   )
   .handler(async ({ data }) => {
@@ -451,7 +451,7 @@ export const createDeploymentSchedule = createServerFn({ method: "POST" })
   });
 
 export const updateDeploymentSchedule = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     validated(
       z.object({
         id: text,
@@ -526,7 +526,7 @@ export const updateDeploymentSchedule = createServerFn({ method: "POST" })
 // KPIs for every affected CR — the same follow-up crs.tsx's "Update
 // Status" action does after a workflow_status change.
 export const markDeploymentScheduleCompleted = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ scheduleId: text })))
+  .validator(validated(z.object({ scheduleId: text })))
   .handler(async ({ data }) => {
     const { userName, role, spocApplications } = await assertPmoScheduleActor(
       "complete a deployment schedule",
@@ -589,7 +589,7 @@ export const markDeploymentScheduleCompleted = createServerFn({ method: "POST" }
   });
 
 export const assignCrsToDeployment = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     validated(
       z.object({ crNumbers: z.array(text).max(1000), scheduleId: text, remarks: optionalText }),
     ),
@@ -663,7 +663,7 @@ export const assignCrsToDeployment = createServerFn({ method: "POST" })
   });
 
 export const removeCrFromDeployment = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ crNumber: text })))
+  .validator(validated(z.object({ crNumber: text })))
   .handler(async ({ data }) => {
     const { userName, role, spocApplications } = await assertDeploymentActor();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -722,7 +722,7 @@ export const removeCrFromDeployment = createServerFn({ method: "POST" })
 // same as assignCrsToDeployment/removeCrFromDeployment: PMO by
 // spoc_applications, ITPM/BA by being the CR's actual ba/itpm.
 export const updateDeploymentStage = createServerFn({ method: "POST" })
-  .inputValidator(validated(z.object({ crNumber: text, stage: text })))
+  .validator(validated(z.object({ crNumber: text, stage: text })))
   .handler(async ({ data }) => {
     const { userName, role, spocApplications } = await assertDeploymentActor();
     if (!MANUAL_STAGES_SET.has(data.stage as DeploymentStage)) {
